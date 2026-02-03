@@ -94,6 +94,9 @@ nix:build-gc-image:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Push container to registry
+# Note: We rebuild the copy-to script here because GitLab artifacts are symlinks
+# to nix store paths that don't exist in the push job's environment.
+# The rebuild is fast when using Attic cache.
 nix:push-container:
   extends: .nix-build-base
   stage: deploy
@@ -103,18 +106,19 @@ nix:push-container:
     - echo "Pushing container to registry..."
     - |
       if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_REGISTRY_USER:-}" ]; then
-        # The copyTo script from nix2container bundles skopeo with nix: transport support
+        # Build the copyTo script (fast if cached in Attic)
+        # Artifacts are symlinks to nix store paths that don't exist here
+        echo "Building container copy-to script..."
+        nix build '.#container.copyTo' --out-link result-copy-to
+
         COPY_TO="./result-copy-to/bin/copy-to"
 
-        # Verify copyTo script exists (artifact from nix:build-container)
         if [ ! -x "$COPY_TO" ]; then
-          echo "ERROR: copyTo script not found. Checking artifacts..."
-          ls -la result-* || true
+          echo "ERROR: copyTo script build failed"
           exit 1
         fi
 
         # Use --dest-creds to authenticate to GitLab registry
-        # The copyTo script passes extra args to skopeo
         DEST_CREDS="--dest-creds=${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD}"
 
         echo "Pushing image: ${CI_REGISTRY_IMAGE}/attic-server:${CI_COMMIT_SHORT_SHA}"
