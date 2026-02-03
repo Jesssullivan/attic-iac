@@ -2,18 +2,20 @@
 # =========================
 #
 # These jobs validate the Nix flake configuration and run static analysis.
+# Uses Alpine with Nix installed via DeterminateSystems installer since
+# nixos/nix images lack /bin/sh required by GitLab Runner.
 
 .nix-check-base:
   stage: validate
-  image:
-    # Use nixpkgs/nix which includes /bin/sh (nixos/nix lacks it)
-    name: lnl7/nix:latest
+  image: alpine:3.21
   tags:
     - nix
   interruptible: true
   before_script:
-    - mkdir -p /etc/nix
-    - echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+    - apk add --no-cache curl xz bash git
+    - curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm --init none
+    - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    - nix --version
 
 # Validate flake configuration
 nix:flake-check:

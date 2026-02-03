@@ -91,8 +91,8 @@ module "nix_runner" {
           executor = "kubernetes"
           [runners.kubernetes]
             namespace = "${var.namespace}"
-            # Use lnl7/nix which includes /bin/sh (nixos/nix lacks it)
-            image = "lnl7/nix:latest"
+            # Use alpine (has /bin/sh) - Nix installed via before_script
+            image = "alpine:3.21"
             image_pull_policy = "IfNotPresent"
             privileged = false
             cpu_request = "100m"

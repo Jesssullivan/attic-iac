@@ -4,12 +4,12 @@
 # These jobs validate Bazel builds work alongside Nix.
 # Bazel is used for validation and artifact bundling, while Nix
 # handles all binary and container builds.
+# Uses Alpine with Nix installed via DeterminateSystems installer since
+# nixos/nix images lack /bin/sh required by GitLab Runner.
 
 .bazel-base:
   stage: build
-  image:
-    # Use nixpkgs/nix which includes /bin/sh (nixos/nix lacks it)
-    name: lnl7/nix:latest
+  image: alpine:3.21
   tags:
     - nix
   interruptible: true
@@ -21,6 +21,9 @@
     paths:
       - ~/.cache/bazel/
   before_script:
+    - apk add --no-cache curl xz bash git
+    - curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm --init none
+    - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     # Bazel is provided by the Nix devShell
     - nix develop --command bazel version
     # Use CI configuration
