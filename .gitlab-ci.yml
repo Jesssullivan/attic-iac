@@ -31,6 +31,7 @@ workflow:
 stages:
   - validate
   - build
+  - test
   - deploy
   - verify
 
