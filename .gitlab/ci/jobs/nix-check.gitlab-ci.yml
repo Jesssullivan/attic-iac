@@ -7,7 +7,7 @@
   stage: validate
   image:
     # Use nixpkgs/nix which includes /bin/sh (nixos/nix lacks it)
-    name: nixpkgs/nix:nixos-25.05-x86_64-linux
+    name: lnl7/nix:latest
   tags:
     - nix
   interruptible: true
