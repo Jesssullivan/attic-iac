@@ -1,0 +1,72 @@
+# Ensure gitignore itself prevents accidental overrides
+!.gitignore
+
+# Bazel
+bazel-*
+user.bazelrc
+
+# Nix
+result
+result-*
+.direnv/
+
+# Terraform/OpenTofu
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+!beehive.tfvars
+!rigel.tfvars
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*.tfplan
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Logs
+*.log
+
+# Prevent coauthoring metadata
+.git-coauthors
+CODEOWNERS
+
+# Local kubeconfig (never commit)
+kubeconfig*
+*.kubeconfig
+.kube/
+
+# Attic local config
+.attic/
+
+# Claude Code cache keys (public, not secret)
+public-key.txt

@@ -1,0 +1,177 @@
+# Attic Cache - GitLab CI/CD Pipeline (Bates ILS)
+# ================================================
+#
+# Deploys Attic Nix binary cache to Bates Kubernetes clusters:
+#   - beehive: Development and merge request reviews
+#   - rigel: Staging and production deployments
+#
+# Authentication: Disabled (public cache on internal Bates network)
+# Storage: MinIO (self-managed S3-compatible storage)
+#
+# Deployment Flow:
+#   - Feature/MR branches: Review environment on beehive
+#   - main branch: Auto-deploy to staging on rigel
+#   - Semver tags (v*.*.*): Production deploy on rigel
+#
+# CI/CD Variables:
+#   With MinIO (default): No S3 variables required
+#   With External S3: S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME
+#
+# GitLab Kubernetes Agent:
+#   Authorization via group: bates-ils/people/jsullivan2
+#   beehive agent: bates-ils/projects/kubernetes/gitlab-agents:beehive
+#   rigel agent: bates-ils/projects/kubernetes/gitlab-agents:rigel
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
+
+stages:
+  - validate
+  - build
+  - deploy
+  - verify
+
+variables:
+  # Namespace configuration
+  NAMESPACE: "attic-cache"
+  FIXED_SUBDOMAIN: "attic-cache"
+
+  # Beehive cluster (review/dev)
+  REVIEW_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
+  KUBE_INGRESS_BASE_DOMAIN: beehive.bates.edu
+  KUBE_CONTEXT: $REVIEW_CONTEXT
+
+  # Rigel cluster (staging/production)
+  STAGING_PROD_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
+  STAGING_KUBE_INGRESS_BASE_DOMAIN: rigel.bates.edu
+
+  # Namespace per environment
+  REVIEW_NS: ${NAMESPACE}-review
+  STAGING_NS: ${NAMESPACE}-staging
+  PROD_NS: ${NAMESPACE}
+
+  # OpenTofu settings
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+  # Nix configuration
+  NIX_CONFIG: |
+    experimental-features = nix-command flakes
+    accept-flake-config = true
+
+  # Attic cache configuration (auth-free)
+  ATTIC_SERVER: "https://${FIXED_SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+  ATTIC_CACHE: "main"
+
+  # Disable unused AutoDevOps features
+  TEST_DISABLED: "1"
+  CODE_QUALITY_DISABLED: "1"
+  POSTGRES_ENABLED: "false"
+
+  # Kubernetes Agent warning suppress
+  KUBERNETES_AGENT_WARNING_SUPPRESS: "true"
+
+# Default job configuration
+default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  interruptible: true
+  tags:
+    - kubernetes
+
+# Include templates and job definitions
+include:
+  # Security scanning
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  # OpenTofu base templates (provides .tofu_with_k8s_tools)
+  - local: '.gitlab/ci/templates/tofu-base.gitlab-ci.yml'
+  # OpenTofu plan and apply jobs
+  - local: '.gitlab/ci/jobs/tofu-plan.gitlab-ci.yml'
+  - local: '.gitlab/ci/jobs/tofu-apply.gitlab-ci.yml'
+  # Nix validation and build jobs
+  - local: '.gitlab/ci/jobs/nix-check.gitlab-ci.yml'
+  - local: '.gitlab/ci/jobs/nix-build.gitlab-ci.yml'
+
+# ==============================================================================
+# Verify Stage - Health Checks
+# ==============================================================================
+
+verify:health:review:
+  stage: verify
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:review
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true
+
+verify:health:staging:
+  stage: verify
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:staging
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+verify:health:production:
+  stage: verify
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:production
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
