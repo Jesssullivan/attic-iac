@@ -49,12 +49,12 @@
     TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
     TF_HTTP_RETRY_WAIT_MIN: "5"
 
-# OpenTofu with K8s tools installed
+# OpenTofu with K8s tools installed and GitLab Kubernetes Agent configured
 .tofu_with_k8s_tools:
   extends: .tofu_gitlab_backend
   before_script:
     - |
-      echo "Installing Kubernetes tools..."
+      echo "=== Setting up Kubernetes tools ==="
       apk add --no-cache curl bash jq yq
 
       # Architecture detection
@@ -65,14 +65,64 @@
         arm64)   KUBE_ARCH="arm64" ;;
         *)       KUBE_ARCH="amd64" ;;
       esac
-      echo "   Architecture: ${ARCH} -> kubectl: ${KUBE_ARCH}"
+      echo "Architecture: ${ARCH} -> kubectl: ${KUBE_ARCH}"
 
       # Install kubectl
       K8S_VERSION=$(curl -L -s --fail https://dl.k8s.io/release/stable.txt 2>/dev/null | tr -d '\n' | tr -d ' ')
       [ -z "$K8S_VERSION" ] && K8S_VERSION="v1.31.0"
-      echo "   kubectl version: ${K8S_VERSION}"
+      echo "kubectl version: ${K8S_VERSION}"
 
       curl -Lo /usr/local/bin/kubectl --fail "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/${KUBE_ARCH}/kubectl"
       chmod +x /usr/local/bin/kubectl
 
       echo "Kubernetes tools installed"
+
+      # Configure GitLab Kubernetes Agent
+      # GitLab CI automatically provides kubeconfig via KUBECONFIG env var
+      # when using the Kubernetes Agent integration
+      echo ""
+      echo "=== Configuring GitLab Kubernetes Agent ==="
+      if [ -n "${KUBE_CONTEXT:-}" ]; then
+        echo "Agent context: ${KUBE_CONTEXT}"
+
+        # Switch to the agent context
+        kubectl config use-context "${KUBE_CONTEXT}" || {
+          echo "WARNING: Could not switch to context ${KUBE_CONTEXT}"
+          echo "Available contexts:"
+          kubectl config get-contexts || echo "No contexts available"
+        }
+
+        # Verify cluster connection (non-blocking)
+        echo ""
+        echo "Verifying cluster connection..."
+        kubectl cluster-info 2>/dev/null || echo "Note: Cluster info unavailable (may work during apply)"
+
+        # Create kubectl wrapper for GitLab Agent compatibility (v1.27+ OpenAPI bug)
+        # See: https://gitlab.com/gitlab-org/gitlab/-/issues/407161
+        echo ""
+        echo "Installing kubectl wrapper for GitLab Agent compatibility..."
+        mkdir -p /tmp/kubectl-wrapper
+        cat > /tmp/kubectl-wrapper/kubectl << 'WRAPPER_EOF'
+      #!/bin/sh
+      # Wrapper to add --validate=false for GitLab Agent compatibility
+      REAL_KUBECTL=$(which -a kubectl | grep -v '/tmp/kubectl-wrapper' | head -1)
+      case "$1" in
+        apply|create|replace|patch)
+          cmd="$1"
+          shift
+          exec $REAL_KUBECTL "$cmd" "$@" --validate=false
+          ;;
+        *)
+          exec $REAL_KUBECTL "$@"
+          ;;
+      esac
+      WRAPPER_EOF
+        chmod +x /tmp/kubectl-wrapper/kubectl
+        export PATH="/tmp/kubectl-wrapper:$PATH"
+        echo "kubectl wrapper installed (adds --validate=false to apply/create/replace/patch)"
+      else
+        echo "WARNING: KUBE_CONTEXT not set - kubectl commands may fail"
+      fi
+
+      echo ""
+      echo "=== Setup complete ==="

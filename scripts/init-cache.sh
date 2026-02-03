@@ -427,12 +427,20 @@ EOF
 generate_ci_secret() {
   local ci_token_name="${1:-gitlab-ci}"
 
-  log_info "Generating CI token secret command..."
+  log_info "CI configuration for Bates deployment..."
 
   echo ""
-  echo "To create a CI token in Kubernetes, run:"
+  echo "Note: Bates deployment uses auth-free mode - no CI tokens required."
+  echo "Configure the following GitLab CI/CD variables:"
   echo ""
-  echo "  ./scripts/generate-ci-token.sh $ci_token_name push,pull main"
+  echo "  When using external S3 (use_minio=false):"
+  echo "    S3_ENDPOINT           - S3 endpoint URL"
+  echo "    S3_ACCESS_KEY_ID      - S3 access key (masked)"
+  echo "    S3_SECRET_ACCESS_KEY  - S3 secret key (masked)"
+  echo "    S3_BUCKET_NAME        - S3 bucket name"
+  echo ""
+  echo "  When using MinIO (use_minio=true, default):"
+  echo "    No S3 variables required - MinIO provides storage internally."
   echo ""
 }
 

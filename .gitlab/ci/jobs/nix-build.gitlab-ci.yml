@@ -23,15 +23,16 @@ nix:build-client:
     - nix build .#attic-client --print-build-logs --out-link result-client
     - |
       # Push to cache if configured (use nix run since attic isn't in PATH)
-      # Requires CI variables: ATTIC_SERVER (URL), ATTIC_TOKEN, ATTIC_CACHE (cache name)
+      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
       # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_TOKEN:-}" ] && [ -n "${ATTIC_CACHE:-}" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+      if [ -n "${ATTIC_SERVER:-}" ]; then
+        ATTIC_CACHE="${ATTIC_CACHE:-main}"
         echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" "$ATTIC_TOKEN"
+        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
         echo "Pushing to Attic cache: $ATTIC_CACHE"
         nix run .#attic -- push "$ATTIC_CACHE" result-client || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: Attic cache not fully configured (need ATTIC_SERVER, ATTIC_TOKEN, ATTIC_CACHE)"
+        echo "SKIP: ATTIC_SERVER not configured"
       fi
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -57,15 +58,16 @@ nix:build-container:
       fi
     - |
       # Push derivation to cache if configured (use nix run since attic isn't in PATH)
-      # Requires CI variables: ATTIC_SERVER (URL), ATTIC_TOKEN, ATTIC_CACHE (cache name)
+      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
       # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_TOKEN:-}" ] && [ -n "${ATTIC_CACHE:-}" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+      if [ -n "${ATTIC_SERVER:-}" ]; then
+        ATTIC_CACHE="${ATTIC_CACHE:-main}"
         echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" "$ATTIC_TOKEN"
+        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
         echo "Pushing container derivation to Attic cache"
         nix run .#attic -- push "$ATTIC_CACHE" result-container || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: Attic cache not fully configured (need ATTIC_SERVER, ATTIC_TOKEN, ATTIC_CACHE)"
+        echo "SKIP: ATTIC_SERVER not configured"
       fi
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -119,7 +121,7 @@ nix:push-container:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   environment:
     name: production
-    url: https://nix-cache.fuzzy-dev.tinyland.dev
+    url: https://attic-cache.rigel.bates.edu
 
 # Full build with all outputs
 nix:build-all:
@@ -135,15 +137,16 @@ nix:build-all:
       ls -la result-*
     - |
       # Push all to cache (use nix run since attic isn't in PATH)
-      # Requires CI variables: ATTIC_SERVER (URL), ATTIC_TOKEN, ATTIC_CACHE (cache name)
+      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
       # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_TOKEN:-}" ] && [ -n "${ATTIC_CACHE:-}" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+      if [ -n "${ATTIC_SERVER:-}" ]; then
+        ATTIC_CACHE="${ATTIC_CACHE:-main}"
         echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" "$ATTIC_TOKEN"
+        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
         echo "Pushing all outputs to Attic cache"
         nix run .#attic -- push "$ATTIC_CACHE" result-* || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: Attic cache not fully configured (need ATTIC_SERVER, ATTIC_TOKEN, ATTIC_CACHE)"
+        echo "SKIP: ATTIC_SERVER not configured"
       fi
   rules:
     - if: $CI_COMMIT_TAG

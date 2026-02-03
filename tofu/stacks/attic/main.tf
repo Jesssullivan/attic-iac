@@ -1,19 +1,20 @@
 # Attic Stack - Nix Binary Cache Deployment
 #
-# Deploys Attic (self-hosted Nix binary cache) to Civo Kubernetes
-# with S3 backend, CloudNativePG PostgreSQL, and HPA autoscaling.
+# Deploys Attic (self-hosted Nix binary cache) to Bates Kubernetes clusters
+# (beehive for dev/review, rigel for staging/production).
 #
 # Architecture:
-#   - Attic API Server: Stateless, HPA-enabled (2-10 replicas)
+#   - Attic API Server: Stateless, HPA-enabled
 #   - Attic GC Worker: Single replica for garbage collection
-#   - PostgreSQL: CloudNativePG HA cluster (3 nodes) OR Neon serverless (legacy)
-#   - S3 Storage: Civo Object Storage (NAR/chunk storage)
+#   - PostgreSQL: CloudNativePG cluster
+#   - S3 Storage: Object storage (NAR/chunk storage)
+#   - Auth: Disabled (public read/write on internal network)
 #
 # Usage:
 #   cd tofu/stacks/attic
 #   tofu init
-#   tofu plan -var-file=terraform.tfvars
-#   tofu apply -var-file=terraform.tfvars
+#   tofu plan -var-file=beehive.tfvars  # or rigel.tfvars
+#   tofu apply -var-file=beehive.tfvars
 
 terraform {
   required_version = ">= 1.6.0"
@@ -31,10 +32,11 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
-    civo = {
-      source  = "civo/civo"
-      version = "~> 1.0"
-    }
+    # civo provider disabled - using GitLab Kubernetes Agent
+    # civo = {
+    #   source  = "civo/civo"
+    #   version = "~> 1.0"
+    # }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -43,54 +45,34 @@ terraform {
 }
 
 # =============================================================================
-# Kubernetes Provider Configuration
+# Kubernetes Provider Configuration (GitLab Kubernetes Agent)
 # =============================================================================
 
 provider "kubernetes" {
-  # Priority 1: Explicit host + client cert (Civo k3s)
-  host                   = var.k8s_host
-  client_certificate     = var.k8s_client_cert
-  client_key             = var.k8s_client_key
-  cluster_ca_certificate = var.k8s_ca_cert
-
-  # Priority 2: Explicit host + token (DOKS)
-  token = var.k8s_token
-
-  # Priority 3: Kubeconfig file
-  config_path    = var.k8s_config_path
-  config_context = var.k8s_config_context
-
-  # TLS verification (disable for self-signed certs)
-  insecure = var.k8s_insecure
+  # GitLab Kubernetes Agent authentication
+  # When k8s_config_path is empty (default), uses KUBECONFIG env var set by GitLab CI
+  # When specified, uses the explicit path (for local development)
+  config_path    = var.k8s_config_path != "" ? var.k8s_config_path : null
+  config_context = var.cluster_context
 }
 
 provider "helm" {
   kubernetes {
-    host                   = var.k8s_host
-    client_certificate     = var.k8s_client_cert
-    client_key             = var.k8s_client_key
-    cluster_ca_certificate = var.k8s_ca_cert
-    token                  = var.k8s_token
-    config_path            = var.k8s_config_path
-    config_context         = var.k8s_config_context
-    insecure               = var.k8s_insecure
+    config_path    = var.k8s_config_path != "" ? var.k8s_config_path : null
+    config_context = var.cluster_context
   }
 }
 
-provider "civo" {
-  token  = var.civo_api_key
-  region = var.civo_region
-}
+# Civo provider disabled - using GitLab Kubernetes Agent for Bates clusters
+# provider "civo" {
+#   token  = var.civo_api_key
+#   region = var.civo_region
+# }
 
 provider "kubectl" {
-  host                   = var.k8s_host
-  client_certificate     = var.k8s_client_cert
-  client_key             = var.k8s_client_key
-  cluster_ca_certificate = var.k8s_ca_cert
-  token                  = var.k8s_token
-  config_path            = var.k8s_config_path
-  config_context         = var.k8s_config_context
-  load_config_file       = var.k8s_config_path != "" ? true : false
+  config_path      = var.k8s_config_path != "" ? var.k8s_config_path : null
+  config_context   = var.cluster_context
+  load_config_file = true
 }
 
 # =============================================================================
@@ -166,49 +148,165 @@ module "cnpg_operator" {
 }
 
 # =============================================================================
-# Civo Object Storage (S3 Backend for NAR Storage)
+# MinIO Operator (Cluster-Wide - Optional)
+# =============================================================================
+# MinIO provides self-managed S3-compatible storage optimized for Nix binary
+# cache workloads. When enabled, Attic uses MinIO instead of external S3.
+
+module "minio_operator" {
+  count  = var.use_minio && var.install_minio_operator ? 1 : 0
+  source = "../../modules/minio-operator"
+
+  namespace        = var.minio_operator_namespace
+  create_namespace = true
+  operator_version = var.minio_operator_version
+
+  operator_replicas       = 1
+  operator_cpu_request    = "50m"
+  operator_memory_request = "64Mi"
+
+  enable_console = false
+}
+
+# =============================================================================
+# MinIO Credentials Secret
 # =============================================================================
 
-module "object_storage" {
-  source = "../../modules/civo-object-store"
+# Generate random password if not provided
+resource "random_password" "minio_password" {
+  count   = var.use_minio && var.minio_root_password == "" ? 1 : 0
+  length  = 32
+  special = false
+}
 
-  # Include environment to ensure unique credential names across staging/production
-  name        = "nix-cache-${var.environment}"
-  bucket_name = var.s3_bucket_name
-  region      = var.civo_region
-  max_size_gb = var.s3_max_size_gb
+locals {
+  minio_root_password = var.use_minio ? (
+    var.minio_root_password != "" ? var.minio_root_password : random_password.minio_password[0].result
+  ) : ""
+}
 
-  create_credentials = var.create_s3_credentials
-  access_key_id      = var.s3_access_key_id
+# MinIO credentials secret (required for tenant)
+resource "kubernetes_secret" "minio_credentials" {
+  count = var.use_minio ? 1 : 0
 
-  additional_labels = {
-    "project" = "attic"
-    "env"     = var.environment
+  metadata {
+    name      = "minio-credentials"
+    namespace = local.namespace_name
+
+    labels = {
+      "app.kubernetes.io/name"       = "minio"
+      "app.kubernetes.io/component"  = "credentials"
+      "app.kubernetes.io/managed-by" = "opentofu"
+    }
+  }
+
+  # MinIO operator expects credentials in config.env format
+  data = {
+    "config.env" = <<-EOT
+      export MINIO_ROOT_USER="${var.minio_root_user}"
+      export MINIO_ROOT_PASSWORD="${local.minio_root_password}"
+    EOT
+  }
+
+  type = "Opaque"
+
+  depends_on = [
+    kubernetes_namespace.nix_cache
+  ]
+}
+
+# =============================================================================
+# MinIO Tenant (Per-Namespace)
+# =============================================================================
+
+module "minio_tenant" {
+  count  = var.use_minio ? 1 : 0
+  source = "../../modules/minio-tenant"
+
+  tenant_name        = "attic-minio"
+  namespace          = local.namespace_name
+  distributed_mode   = var.minio_distributed_mode
+  storage_class      = var.minio_storage_class != "" ? var.minio_storage_class : var.pg_storage_class
+  volume_size        = var.minio_volume_size
+  credentials_secret = kubernetes_secret.minio_credentials[0].metadata[0].name
+
+  # Bucket configuration - includes pg-backup bucket when backups enabled
+  buckets = concat(
+    [
+      {
+        name = var.minio_bucket_name
+      }
+    ],
+    var.pg_enable_backup ? [
+      {
+        name = "pg-backup"
+      }
+    ] : []
+  )
+
+  # Resource sizing
+  cpu_request    = var.minio_cpu_request
+  memory_request = var.minio_memory_request
+  cpu_limit      = var.minio_cpu_limit
+  memory_limit   = var.minio_memory_limit
+
+  # Lifecycle policies
+  enable_lifecycle_policies = true
+  nar_retention_days        = var.minio_nar_retention_days
+  chunk_retention_days      = var.minio_chunk_retention_days
+
+  # Monitoring
+  enable_monitoring = var.enable_prometheus_monitoring
+
+  depends_on = [
+    module.minio_operator,
+    kubernetes_secret.minio_credentials
+  ]
+}
+
+# =============================================================================
+# S3 Configuration (MinIO or External)
+# =============================================================================
+
+# Validation: Ensure external S3 config is provided when MinIO is disabled
+locals {
+  # Validate S3 configuration when not using MinIO
+  _s3_config_valid = var.use_minio ? true : (
+    var.s3_endpoint != "" &&
+    var.s3_bucket_name != "" &&
+    var.s3_access_key_id != "" &&
+    var.s3_secret_access_key != ""
+  )
+
+  # Use MinIO endpoint if enabled, otherwise use external S3
+  effective_s3_endpoint = var.use_minio ? module.minio_tenant[0].s3_endpoint : var.s3_endpoint
+  effective_s3_bucket   = var.use_minio ? var.minio_bucket_name : var.s3_bucket_name
+
+  # S3 credentials for Attic
+  effective_s3_access_key = var.use_minio ? var.minio_root_user : var.s3_access_key_id
+  effective_s3_secret_key = var.use_minio ? local.minio_root_password : var.s3_secret_access_key
+}
+
+# This resource fails the plan if S3 config is invalid
+resource "terraform_data" "validate_s3_config" {
+  lifecycle {
+    precondition {
+      condition     = local._s3_config_valid
+      error_message = "When use_minio=false, S3 variables (s3_endpoint, s3_bucket_name, s3_access_key_id, s3_secret_access_key) are required."
+    }
   }
 }
 
 # =============================================================================
-# Civo Object Storage (S3 Backend for PostgreSQL Backups)
+# S3 Object Storage (External - configured via variables)
 # =============================================================================
+# Note: For Bates deployment, S3 storage can be provided externally or via MinIO.
+# Set use_minio=true to deploy MinIO, or configure s3_endpoint, s3_bucket_name,
+# s3_access_key_id, s3_secret_access_key in your tfvars file.
 
-module "pg_backup_storage" {
-  count  = var.use_cnpg_postgres && var.pg_enable_backup ? 1 : 0
-  source = "../../modules/civo-object-store"
-
-  # Include environment to ensure unique credential names across staging/production
-  name        = "attic-pg-backup-${var.environment}"
-  bucket_name = var.pg_backup_bucket_name
-  region      = var.civo_region
-  max_size_gb = var.pg_backup_max_size_gb
-
-  create_credentials = true
-
-  additional_labels = {
-    "project" = "attic"
-    "env"     = var.environment
-    "purpose" = "postgresql-backup"
-  }
-}
+# Civo object storage modules disabled - using external S3 or MinIO
+# module "object_storage" { ... }
+# module "pg_backup_storage" { ... }
 
 # =============================================================================
 # CloudNativePG PostgreSQL Cluster
@@ -248,13 +346,18 @@ module "attic_pg" {
   # TLS
   enable_tls = true
 
-  # Backup to S3
-  enable_backup                = var.pg_enable_backup
-  backup_s3_endpoint           = var.pg_enable_backup ? module.pg_backup_storage[0].endpoint_url : ""
-  backup_s3_bucket             = var.pg_enable_backup ? module.pg_backup_storage[0].bucket_name : ""
+  # Backup to S3 (uses MinIO if enabled, otherwise external S3)
+  enable_backup = var.pg_enable_backup
+  backup_s3_endpoint = var.use_minio ? (
+    # MinIO internal endpoint (without http:// prefix as CNPG adds it)
+    "attic-minio-hl.${local.namespace_name}.svc:9000"
+  ) : var.s3_endpoint
+  backup_s3_bucket = var.use_minio ? "pg-backup" : (
+    var.pg_backup_bucket_name != "" ? var.pg_backup_bucket_name : "${var.s3_bucket_name}-pg-backup"
+  )
   create_s3_credentials_secret = var.pg_enable_backup
-  backup_s3_access_key_id      = var.pg_enable_backup ? module.pg_backup_storage[0].access_key_id : ""
-  backup_s3_secret_access_key  = var.pg_enable_backup ? module.pg_backup_storage[0].secret_access_key : ""
+  backup_s3_access_key_id      = local.effective_s3_access_key
+  backup_s3_secret_access_key  = local.effective_s3_secret_key
   backup_retention_policy      = var.pg_backup_retention
 
   # Scheduled backups
@@ -274,7 +377,7 @@ module "attic_pg" {
   enable_monitoring = var.enable_prometheus_monitoring
 
   # PDB
-  enable_pdb       = var.pg_instances > 1
+  enable_pdb        = var.pg_instances > 1
   pdb_min_available = var.pg_instances > 2 ? "2" : "1"
 
   depends_on = [
@@ -286,7 +389,7 @@ module "attic_pg" {
 # Secrets
 # =============================================================================
 
-# Attic secrets (S3 credentials, JWT signing key, Database URL)
+# Attic secrets (S3 credentials, Database URL - auth disabled)
 resource "kubernetes_secret" "attic_secrets" {
   metadata {
     name      = "attic-secrets"
@@ -300,21 +403,21 @@ resource "kubernetes_secret" "attic_secrets" {
   }
 
   data = {
-    # JWT signing key (RS256)
-    ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64 = var.attic_jwt_secret_base64
-
     # PostgreSQL connection
     # Use CNPG-generated URL if using CloudNativePG, otherwise use provided URL
     DATABASE_URL = var.use_cnpg_postgres ? module.attic_pg[0].database_url : var.database_url
 
-    # S3 credentials
-    AWS_ACCESS_KEY_ID     = module.object_storage.access_key_id
-    AWS_SECRET_ACCESS_KEY = module.object_storage.secret_access_key
+    # S3 credentials (MinIO or external S3)
+    AWS_ACCESS_KEY_ID     = local.effective_s3_access_key
+    AWS_SECRET_ACCESS_KEY = local.effective_s3_secret_key
   }
 
   type = "Opaque"
 
-  depends_on = [module.attic_pg]
+  depends_on = [
+    module.attic_pg,
+    module.minio_tenant
+  ]
 }
 
 # =============================================================================
@@ -336,21 +439,21 @@ resource "kubernetes_config_map" "attic_config" {
   data = {
     "server.toml" = <<-EOT
       # Attic Server Configuration
-      # Generated by OpenTofu
+      # Generated by OpenTofu - Auth disabled for Bates internal network
 
       listen = "[::]:8080"
 
-      # Token signing - uses ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64 env var
-      # token-rs256-secret-base64 is set via environment variable
+      # Auth disabled - public cache for internal use
+      # require-proof-of-possession = false
 
       [database]
       # Uses DATABASE_URL environment variable
 
       [storage]
       type = "s3"
-      region = "${var.civo_region}"
-      bucket = "${module.object_storage.bucket_name}"
-      endpoint = "${module.object_storage.endpoint_url}"
+      region = "${var.s3_region}"
+      bucket = "${local.effective_s3_bucket}"
+      endpoint = "${local.effective_s3_endpoint}"
 
       [chunking]
       nar-size-threshold = ${var.chunking_nar_size_threshold}
@@ -367,6 +470,10 @@ resource "kubernetes_config_map" "attic_config" {
       default-retention-period = "${var.gc_retention_period}"
     EOT
   }
+
+  depends_on = [
+    module.minio_tenant
+  ]
 }
 
 # =============================================================================
@@ -415,7 +522,7 @@ module "attic_api" {
   scale_up_pods                    = 4
 
   # Health checks
-  health_check_path       = "/"  # Root endpoint returns HTML confirming service is up
+  health_check_path       = "/" # Root endpoint returns HTML confirming service is up
   liveness_initial_delay  = 10
   liveness_period         = 30
   readiness_initial_delay = 5
@@ -441,9 +548,9 @@ module "attic_api" {
   # Security - enable hardened security context
   # heywoodlh/attic image supports running as non-root user 1000
   enable_security_context = true
-  run_as_user  = 1000
-  run_as_group = 1000
-  fs_group     = 1000
+  run_as_user             = 1000
+  run_as_group            = 1000
+  fs_group                = 1000
 
   # HA
   enable_topology_spread = true
@@ -621,12 +728,17 @@ output "ingress_url" {
 
 output "s3_bucket" {
   description = "S3 bucket name for NAR storage"
-  value       = module.object_storage.bucket_name
+  value       = local.effective_s3_bucket
 }
 
 output "s3_endpoint" {
   description = "S3 endpoint URL"
-  value       = module.object_storage.endpoint_url
+  value       = local.effective_s3_endpoint
+}
+
+output "s3_provider" {
+  description = "S3 storage provider (minio or external)"
+  value       = var.use_minio ? "minio" : "external"
 }
 
 output "hpa_config" {
@@ -673,7 +785,7 @@ output "pg_database_url" {
 
 output "pg_backup_bucket" {
   description = "S3 bucket for PostgreSQL backups"
-  value       = var.use_cnpg_postgres && var.pg_enable_backup ? module.pg_backup_storage[0].bucket_name : "N/A"
+  value       = var.use_cnpg_postgres && var.pg_enable_backup ? (var.pg_backup_bucket_name != "" ? var.pg_backup_bucket_name : "${var.s3_bucket_name}-pg-backup") : "N/A"
 }
 
 # DNS outputs
@@ -697,111 +809,127 @@ output "load_balancer_ip" {
   value       = local.load_balancer_ip
 }
 
+# MinIO outputs
+output "minio_enabled" {
+  description = "Whether MinIO is enabled for S3 storage"
+  value       = var.use_minio
+}
+
+output "minio_tenant_name" {
+  description = "Name of the MinIO tenant"
+  value       = var.use_minio ? module.minio_tenant[0].tenant_name : "N/A"
+}
+
+output "minio_distributed_mode" {
+  description = "Whether MinIO is running in distributed mode"
+  value       = var.use_minio ? module.minio_tenant[0].distributed_mode : false
+}
+
+output "minio_storage_total" {
+  description = "Total MinIO storage capacity"
+  value       = var.use_minio ? module.minio_tenant[0].storage_total : "N/A"
+}
+
 # =============================================================================
-# Attic Token Management
+# Cache Warming CronJob (Optional)
 # =============================================================================
 
-module "attic_tokens" {
-  count  = var.enable_token_management ? 1 : 0
-  source = "../../modules/attic-tokens"
+resource "kubernetes_cron_job_v1" "cache_warm" {
+  count = var.enable_cache_warming ? 1 : 0
 
-  namespace   = local.namespace_name
-  environment = var.environment
-  part_of     = "nix-cache"
+  metadata {
+    name      = "attic-cache-warm"
+    namespace = local.namespace_name
 
-  # Token validity periods
-  ci_token_validity_days      = var.ci_token_validity_days
-  service_token_validity_days = var.service_token_validity_days
-  root_token_validity_days    = var.root_token_validity_days
-
-  # CI tokens for each repository
-  ci_tokens = var.ci_tokens
-
-  # Read-only tokens for public access
-  readonly_tokens = var.readonly_tokens
-
-  # Service tokens for internal operations
-  service_tokens = var.service_tokens
-
-  # Root token
-  create_root_token = var.create_root_token
-
-  # Token revocation
-  revoked_token_ids        = var.revoked_token_ids
-  revocation_list_revision = var.revocation_list_revision
-
-  # RBAC
-  create_token_accessor_sa = var.create_token_accessor_sa
-
-  additional_labels = {
-    "app.kubernetes.io/part-of" = "nix-cache"
+    labels = {
+      "app.kubernetes.io/name"       = "attic-cache-warm"
+      "app.kubernetes.io/component"  = "cache-warming"
+      "app.kubernetes.io/managed-by" = "opentofu"
+      "app.kubernetes.io/part-of"    = "nix-cache"
+    }
   }
 
-  # Namespace dependency handled via local.namespace_name reference
+  spec {
+    schedule                      = "0 2 * * *" # Daily at 2 AM
+    concurrency_policy            = "Forbid"
+    successful_jobs_history_limit = 3
+    failed_jobs_history_limit     = 3
+
+    job_template {
+      metadata {
+        labels = {
+          "app.kubernetes.io/name"      = "attic-cache-warm"
+          "app.kubernetes.io/component" = "cache-warming"
+        }
+      }
+
+      spec {
+        ttl_seconds_after_finished = 3600
+
+        template {
+          metadata {
+            labels = {
+              "app.kubernetes.io/name"      = "attic-cache-warm"
+              "app.kubernetes.io/component" = "cache-warming"
+            }
+          }
+
+          spec {
+            restart_policy = "OnFailure"
+
+            security_context {
+              run_as_non_root = true
+              run_as_user     = 1000
+              run_as_group    = 1000
+              fs_group        = 1000
+            }
+
+            container {
+              name  = "warm"
+              image = "nixos/nix:latest"
+
+              command = ["/bin/sh", "-c"]
+              args = [
+                <<-EOT
+                  set -e
+                  echo "Warming cache with common flake inputs..."
+
+                  # Pre-fetch common Nix flake inputs
+                  nix flake prefetch github:NixOS/nixpkgs/nixos-unstable || echo "Failed to prefetch nixpkgs"
+                  nix flake prefetch github:nix-community/home-manager || echo "Failed to prefetch home-manager"
+
+                  echo "Cache warming complete"
+                EOT
+              ]
+
+              resources {
+                requests = {
+                  cpu    = "100m"
+                  memory = "256Mi"
+                }
+                limits = {
+                  cpu    = "500m"
+                  memory = "1Gi"
+                }
+              }
+
+              security_context {
+                allow_privilege_escalation = false
+                read_only_root_filesystem  = false
+                capabilities {
+                  drop = ["ALL"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 # =============================================================================
-# Token Management Outputs
+# Token Management (DISABLED - Auth-free mode for Bates internal network)
 # =============================================================================
-
-output "token_management_enabled" {
-  description = "Whether token management module is enabled"
-  value       = var.enable_token_management
-}
-
-output "ci_token_ids" {
-  description = "Map of CI token names to their IDs (for revocation)"
-  value       = var.enable_token_management ? module.attic_tokens[0].ci_token_ids : {}
-}
-
-output "ci_tokens_secret_name" {
-  description = "Name of the Kubernetes secret containing CI tokens"
-  value       = var.enable_token_management ? module.attic_tokens[0].ci_tokens_secret_name : "N/A"
-}
-
-output "ci_tokens" {
-  description = "Map of CI token names to their secrets"
-  value       = var.enable_token_management ? module.attic_tokens[0].ci_tokens : {}
-  sensitive   = true
-}
-
-output "readonly_tokens" {
-  description = "Map of read-only token names to their secrets"
-  value       = var.enable_token_management ? module.attic_tokens[0].readonly_tokens : {}
-  sensitive   = true
-}
-
-output "service_tokens" {
-  description = "Map of service token names to their secrets"
-  value       = var.enable_token_management ? module.attic_tokens[0].service_tokens : {}
-  sensitive   = true
-}
-
-output "root_token" {
-  description = "Root admin token"
-  value       = var.enable_token_management && var.create_root_token ? module.attic_tokens[0].root_token : null
-  sensitive   = true
-}
-
-output "token_rotation_schedule" {
-  description = "Token rotation schedule information"
-  value = var.enable_token_management ? {
-    ci_tokens = {
-      last_rotation = module.attic_tokens[0].ci_token_rotation_date
-      next_rotation = module.attic_tokens[0].ci_token_next_rotation
-    }
-    service_tokens = {
-      last_rotation = module.attic_tokens[0].service_token_rotation_date
-      next_rotation = module.attic_tokens[0].service_token_next_rotation
-    }
-    root_token = {
-      last_rotation = module.attic_tokens[0].root_token_rotation_date
-      next_rotation = module.attic_tokens[0].root_token_next_rotation
-    }
-  } : null
-}
-
-output "token_summary" {
-  description = "Summary of all generated tokens (no secrets)"
-  value       = var.enable_token_management ? module.attic_tokens[0].token_summary : null
-}
+# Token management has been removed for simplified auth-free operation.
+# The cache is accessible on the internal Bates network without authentication.

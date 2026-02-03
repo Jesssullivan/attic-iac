@@ -2,49 +2,61 @@
 # Attic Stack - Terraform Variables Example
 # =============================================================================
 #
-# Copy this file to terraform.tfvars and fill in the required values.
+# Bates College - Nix Binary Cache Deployment
 #
-#   cp terraform.tfvars.example terraform.tfvars
-#   vim terraform.tfvars
+# This file shows example values. For actual deployment:
+#   - beehive.tfvars: Development/review environments
+#   - rigel.tfvars: Staging/production environments
 #
-# For full documentation, see docs/DEPLOYMENT_CHECKLIST.md
+# Most variables are provided via GitLab CI/CD, not tfvars files.
 # =============================================================================
 
-# [REQUIRED] Civo API key
-# Get from: https://dashboard.civo.com/security
-civo_api_key = ""
+# [REQUIRED] GitLab Kubernetes Agent Context
+# - beehive (dev/review): bates-ils/projects/kubernetes/gitlab-agents:beehive
+# - rigel (staging/prod): bates-ils/projects/kubernetes/gitlab-agents:rigel
+cluster_context = "bates-ils/projects/kubernetes/gitlab-agents:beehive"
 
-# Civo region
-civo_region = "NYC1"
-
-# [REQUIRED] Kubernetes authentication
-# Extract from kubeconfig (see docs/DEPLOYMENT_CHECKLIST.md)
-k8s_host        = ""
-k8s_client_cert = ""
-k8s_client_key  = ""
-k8s_ca_cert     = ""
-
-# Or use kubeconfig file (for local development)
-# k8s_config_path    = "~/.kube/config"
-# k8s_config_context = "bitter-darkness-16657317"
-
-# [REQUIRED] JWT signing key
-# Generate with: ./scripts/generate-secrets.sh
-attic_jwt_secret_base64 = ""
+# Base domain for ingress
+# - beehive: beehive.bates.edu
+# - rigel: rigel.bates.edu
+ingress_domain = "beehive.bates.edu"
 
 # Namespace and environment
-namespace   = "nix-cache"
-environment = "production"
+namespace   = "attic-cache"
+environment = "development"
 
-# PostgreSQL configuration
+# =============================================================================
+# S3 Storage (Required - Set via CI/CD Variables)
+# =============================================================================
+# These should be set as CI/CD variables, not in tfvars:
+#   S3_ENDPOINT           - S3 endpoint URL
+#   S3_ACCESS_KEY_ID      - S3 access key (masked)
+#   S3_SECRET_ACCESS_KEY  - S3 secret key (masked)
+#   S3_BUCKET_NAME        - S3 bucket name
+#
+# For local testing only:
+# s3_endpoint          = "https://s3.example.com"
+# s3_bucket_name       = "attic-cache"
+# s3_access_key_id     = ""
+# s3_secret_access_key = ""
+
+# =============================================================================
+# PostgreSQL (CloudNativePG)
+# =============================================================================
 use_cnpg_postgres = true
-pg_instances      = 3
+pg_instances      = 1          # 1 for dev, 3 for production HA
+pg_storage_size   = "5Gi"      # 5Gi for dev, 10Gi for production
+pg_storage_class  = "longhorn"
 
+# =============================================================================
+# API Server
+# =============================================================================
+api_min_replicas = 1  # 1 for dev, 2 for production
+api_max_replicas = 3  # 3 for dev, 10 for production
+
+# =============================================================================
 # Ingress
+# =============================================================================
 enable_ingress = true
-ingress_host   = "nix-cache.fuzzy-dev.tinyland.dev"
 enable_tls     = true
-
-# Token management
-enable_token_management = true
-create_root_token       = true
+ingress_class  = "traefik"

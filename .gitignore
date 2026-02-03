@@ -1,3 +1,6 @@
+# Ensure gitignore itself prevents accidental overrides
+!.gitignore
+
 # Bazel
 bazel-*
 user.bazelrc
@@ -12,6 +15,8 @@ result-*
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+!beehive.tfvars
+!rigel.tfvars
 .terraform/
 .terraform.lock.hcl
 crash.log
@@ -21,6 +26,7 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+*.tfplan
 
 # Secrets
 .env
@@ -49,3 +55,18 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Prevent coauthoring metadata
+.git-coauthors
+CODEOWNERS
+
+# Local kubeconfig (never commit)
+kubeconfig*
+*.kubeconfig
+.kube/
+
+# Attic local config
+.attic/
+
+# Claude Code cache keys (public, not secret)
+public-key.txt

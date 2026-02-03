@@ -122,7 +122,7 @@ variable "secret_mounts" {
 variable "cpu_request" {
   description = "CPU request for container"
   type        = string
-  default     = "100m"
+  default     = "50m"
 }
 
 variable "cpu_limit" {
@@ -134,7 +134,7 @@ variable "cpu_limit" {
 variable "memory_request" {
   description = "Memory request for container"
   type        = string
-  default     = "128Mi"
+  default     = "64Mi"
 }
 
 variable "memory_limit" {

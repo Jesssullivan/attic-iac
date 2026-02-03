@@ -1,73 +1,78 @@
-# Attic Cache - GitLab CI/CD Pipeline
-# ====================================
+# Attic Cache - GitLab CI/CD Pipeline (Bates ILS)
+# ================================================
 #
-# This pipeline builds, tests, and deploys the Attic Nix binary cache.
-# It uses Nix flakes for reproducible builds and dogfoods the Attic cache.
+# Deploys Attic Nix binary cache to Bates Kubernetes clusters:
+#   - beehive: Development and merge request reviews
+#   - rigel: Staging and production deployments
+#
+# Authentication: Disabled (public cache on internal Bates network)
+# Storage: MinIO (self-managed S3-compatible storage)
 #
 # Deployment Flow:
-#   - Feature branches: Plan only (no apply)
-#   - main branch: Auto-deploy to staging, manual production
-#   - Semver tags (v*.*.*): Auto-deploy to production
+#   - Feature/MR branches: Review environment on beehive
+#   - main branch: Auto-deploy to staging on rigel
+#   - Semver tags (v*.*.*): Production deploy on rigel
 #
-# Pipeline Components:
-#   - Nix Builds: flake check, build, test
-#   - Bazel Builds: hermetic builds via rules_nix
-#   - Infrastructure: OpenTofu deployments to Civo Kubernetes
+# CI/CD Variables:
+#   With MinIO (default): No S3 variables required
+#   With External S3: S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME
 #
-# Required CI/CD Variables:
-#   CIVO_KUBECONFIG       - Civo kubeconfig (file type)
-#   CIVO_API_KEY          - Civo API key (masked)
-#   ATTIC_DATABASE_URL    - PostgreSQL connection string (masked)
-#   ATTIC_JWT_SECRET      - Base64 RSA key for JWT signing (masked)
-#   ATTIC_TOKEN           - CI token for cache push (masked, optional)
-#
-# Environment Protection:
-#   - staging: Auto-deploy, auto-stop after 1 week
-#   - production: Protected environment (configure in Settings > Environments)
+# GitLab Kubernetes Agent:
+#   Authorization via group: bates-ils/people/jsullivan2
+#   beehive agent: bates-ils/projects/kubernetes/gitlab-agents:beehive
+#   rigel agent: bates-ils/projects/kubernetes/gitlab-agents:rigel
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
 
 stages:
   - validate
   - build
-  - test
   - deploy
   - verify
 
 variables:
+  # Namespace configuration
+  NAMESPACE: "attic-cache"
+  FIXED_SUBDOMAIN: "attic-cache"
+
+  # Beehive cluster (review/dev)
+  REVIEW_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
+  KUBE_INGRESS_BASE_DOMAIN: beehive.bates.edu
+  KUBE_CONTEXT: $REVIEW_CONTEXT
+
+  # Rigel cluster (staging/production)
+  STAGING_PROD_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
+  STAGING_KUBE_INGRESS_BASE_DOMAIN: rigel.bates.edu
+
+  # Namespace per environment
+  REVIEW_NS: ${NAMESPACE}-review
+  STAGING_NS: ${NAMESPACE}-staging
+  PROD_NS: ${NAMESPACE}
+
+  # OpenTofu settings
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
   # Nix configuration
   NIX_CONFIG: |
     experimental-features = nix-command flakes
     accept-flake-config = true
-  # Attic cache configuration
-  ATTIC_SERVER: "https://nix-cache.fuzzy-dev.tinyland.dev"
-  ATTIC_CACHE: "main"
-  # OpenTofu settings
-  TF_IN_AUTOMATION: "true"
-  TF_INPUT: "false"
-  # Civo cluster configuration
-  CIVO_CLUSTER_NAME: "bitter-darkness-16657317"
-  CIVO_REGION: "NYC1"
-  # HPA configuration
-  HPA_NAMESPACE: "nix-cache"
-  HPA_DEPLOYMENT: "attic"
-  HPA_MIN_REPLICAS: "2"
-  HPA_MAX_REPLICAS: "10"
-  # Security scanning
-  SAST_EXCLUDED_PATHS: "tofu/modules/**/test, docs"
 
-# Workflow rules to prevent duplicate pipelines
-workflow:
-  rules:
-    # Run on merge requests
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    # Run on main branch pushes
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    # Run on feature/fix/infra branches
-    - if: '$CI_COMMIT_BRANCH =~ /^(feature|fix|infra)\/.+/'
-    # Run on semver tags for production releases
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/'
-    # Skip if push to branch with open MR (to avoid duplicate pipelines)
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
-      when: never
+  # Attic cache configuration (auth-free)
+  ATTIC_SERVER: "https://${FIXED_SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+  ATTIC_CACHE: "main"
+
+  # Disable unused AutoDevOps features
+  TEST_DISABLED: "1"
+  CODE_QUALITY_DISABLED: "1"
+  POSTGRES_ENABLED: "false"
+
+  # Kubernetes Agent warning suppress
+  KUBERNETES_AGENT_WARNING_SUPPRESS: "true"
 
 # Default job configuration
 default:
@@ -77,97 +82,96 @@ default:
       - runner_system_failure
       - stuck_or_timeout_failure
   interruptible: true
+  tags:
+    - kubernetes
 
-# Include modular CI job definitions
+# Include templates and job definitions
 include:
-  # Nix builds
-  - local: ".gitlab/ci/jobs/nix-check.gitlab-ci.yml"
-  - local: ".gitlab/ci/jobs/nix-build.gitlab-ci.yml"
-  - local: ".gitlab/ci/jobs/bazel-build.gitlab-ci.yml"
-
-  # Infrastructure templates
-  - local: ".gitlab/ci/templates/tofu-base.gitlab-ci.yml"
-  - local: ".gitlab/ci/templates/civo-auth.gitlab-ci.yml"
-  - local: ".gitlab/ci/templates/hpa-deploy.gitlab-ci.yml"
-
-  # Infrastructure jobs
-  - local: ".gitlab/ci/jobs/tofu-plan.gitlab-ci.yml"
-  - local: ".gitlab/ci/jobs/tofu-apply.gitlab-ci.yml"
-  - local: ".gitlab/ci/jobs/k8s-deploy.gitlab-ci.yml"
-
-  # GitLab Security Templates
+  # Security scanning
   - template: Jobs/SAST.gitlab-ci.yml
   - template: Jobs/Secret-Detection.gitlab-ci.yml
+  # OpenTofu base templates (provides .tofu_with_k8s_tools)
+  - local: '.gitlab/ci/templates/tofu-base.gitlab-ci.yml'
+  # OpenTofu plan and apply jobs
+  - local: '.gitlab/ci/jobs/tofu-plan.gitlab-ci.yml'
+  - local: '.gitlab/ci/jobs/tofu-apply.gitlab-ci.yml'
+  # Nix validation and build jobs
+  - local: '.gitlab/ci/jobs/nix-check.gitlab-ci.yml'
+  - local: '.gitlab/ci/jobs/nix-build.gitlab-ci.yml'
 
 # ==============================================================================
-# Environment Definitions
+# Verify Stage - Health Checks
 # ==============================================================================
 
-# Staging environment - auto-deploys from main
-.staging_environment:
-  environment:
-    name: staging
-    url: https://nix-cache-staging.fuzzy-dev.tinyland.dev
-    on_stop: tofu:destroy:staging
-    auto_stop_in: 1 week
-    deployment_tier: staging
-
-# Production environment - protected, requires approval for manual deploys
-.production_environment:
-  environment:
-    name: production
-    url: https://nix-cache.fuzzy-dev.tinyland.dev
-    deployment_tier: production
-    # Protected environment settings configured in GitLab UI:
-    # - Required approvals: 1
-    # - Allowed to deploy: Maintainers
-    # - Deployment freeze windows: Configured as needed
-
-# ==============================================================================
-# Stage Overrides for Proper Ordering
-# ==============================================================================
-
-# Verify stage jobs
-hpa:validate:staging:
+verify:health:review:
   stage: verify
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:review
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true
 
-hpa:validate:
+verify:health:staging:
   stage: verify
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:staging
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-hpa:scale-test:staging:
+verify:health:production:
   stage: verify
-
-hpa:scale-test:
-  stage: verify
-
-health:check:staging:
-  stage: verify
-
-health:check:
-  stage: verify
-
-resources:report:staging:
-  stage: verify
-
-resources:report:
-  stage: verify
-# ==============================================================================
-# Pipeline Status Badges
-# ==============================================================================
-#
-# Add these badges to your README.md:
-#
-# Pipeline Status:
-#   ![pipeline](https://gitlab.com/tinyland/projects/attic-cache/badges/main/pipeline.svg)
-#
-# Coverage:
-#   ![coverage](https://gitlab.com/tinyland/projects/attic-cache/badges/main/coverage.svg)
-#
-# Latest Release:
-#   ![release](https://gitlab.com/tinyland/projects/attic-cache/-/badges/release.svg)
-#
-# Environment Status (add to architecture docs):
-#   - Staging: https://nix-cache-staging.fuzzy-dev.tinyland.dev
-#   - Production: https://nix-cache.fuzzy-dev.tinyland.dev
-#
-# ==============================================================================
+  image: curlimages/curl:latest
+  needs:
+    - job: tofu:apply:production
+      optional: true
+  script:
+    - |
+      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
+      echo "Checking health at: ${HEALTH_URL}"
+      for i in 1 2 3 4 5; do
+        if curl -sSf "$HEALTH_URL"; then
+          echo ""
+          echo "Health check passed!"
+          exit 0
+        fi
+        echo "Attempt $i failed, retrying in 10s..."
+        sleep 10
+      done
+      echo "Health check failed after 5 attempts"
+      exit 1
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/

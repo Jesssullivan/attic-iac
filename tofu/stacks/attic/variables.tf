@@ -1,82 +1,32 @@
 # Attic Stack - Variables
 #
 # Configuration variables for the Attic Nix binary cache deployment.
+# Bates College deployment - auth-free mode for internal network.
 
 # =============================================================================
-# Kubernetes Authentication
+# Kubernetes Authentication (GitLab Kubernetes Agent)
 # =============================================================================
-
-variable "k8s_host" {
-  description = "Kubernetes API server URL"
-  type        = string
-  default     = ""
-}
-
-variable "k8s_client_cert" {
-  description = "Client certificate for Kubernetes auth (Civo/RKE2)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "k8s_client_key" {
-  description = "Client key for Kubernetes auth (Civo/RKE2)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "k8s_ca_cert" {
-  description = "CA certificate for Kubernetes API"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "k8s_token" {
-  description = "Bearer token for Kubernetes auth (DOKS)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
 
 variable "k8s_config_path" {
-  description = "Path to kubeconfig file"
+  description = "Path to kubeconfig file (usually set by GitLab CI)"
   type        = string
   default     = ""
 }
 
-variable "k8s_config_context" {
-  description = "Kubeconfig context to use"
+variable "cluster_context" {
+  description = "GitLab Kubernetes Agent context (e.g., bates-ils/projects/kubernetes/gitlab-agents:beehive)"
   type        = string
-  default     = ""
-}
-
-variable "k8s_insecure" {
-  description = "Skip TLS verification (for self-signed certs)"
-  type        = bool
-  default     = false
-}
-
-# =============================================================================
-# Civo Configuration
-# =============================================================================
-
-variable "civo_api_key" {
-  description = "Civo API key for object storage provisioning"
-  type        = string
-  sensitive   = true
-}
-
-variable "civo_region" {
-  description = "Civo region"
-  type        = string
-  default     = "NYC1"
 
   validation {
-    condition     = contains(["NYC1", "LON1", "FRA1", "PHX1"], var.civo_region)
-    error_message = "civo_region must be one of: NYC1, LON1, FRA1, PHX1"
+    condition     = can(regex("^bates-ils/projects/kubernetes/gitlab-agents:(beehive|rigel)$", var.cluster_context))
+    error_message = "cluster_context must be a valid Bates GitLab Agent context (beehive or rigel)"
   }
+}
+
+variable "ingress_domain" {
+  description = "Base domain for ingress (beehive.bates.edu or rigel.bates.edu)"
+  type        = string
+  default     = "beehive.bates.edu"
 }
 
 # =============================================================================
@@ -106,11 +56,6 @@ variable "adopt_existing_namespace" {
   default     = false
 }
 
-variable "adopt_existing_object_store" {
-  description = "Adopt existing Civo object store credentials instead of creating new ones"
-  type        = bool
-  default     = false
-}
 
 variable "deploy_version" {
   description = "Deployment version tag (for rollback tracking)"
@@ -127,7 +72,7 @@ variable "attic_image" {
   type        = string
   # Pinned to commit 12cbeca (2026-01-22) for reproducibility and security
   # Update this when upgrading Attic version after testing
-  default     = "heywoodlh/attic:12cbeca141f46e1ade76728bce8adc447f2166c6"
+  default = "heywoodlh/attic:12cbeca141f46e1ade76728bce8adc447f2166c6"
 }
 
 # =============================================================================
@@ -194,7 +139,7 @@ variable "pg_storage_size" {
 variable "pg_storage_class" {
   description = "Kubernetes storage class for PostgreSQL"
   type        = string
-  default     = "civo-volume"
+  default     = "trident-delete"
 }
 
 variable "pg_max_connections" {
@@ -294,52 +239,48 @@ variable "enable_prometheus_monitoring" {
 }
 
 # =============================================================================
-# S3 Storage Configuration
+# S3 Storage Configuration (Optional when using MinIO)
 # =============================================================================
+# When use_minio=true, MinIO provides S3-compatible storage internally.
+# These variables are only required when use_minio=false.
 
-variable "s3_bucket_name" {
-  description = "S3 bucket name (auto-generated if empty)"
+variable "s3_endpoint" {
+  description = "S3 endpoint URL (required if use_minio=false)"
   type        = string
   default     = ""
 }
 
-variable "s3_max_size_gb" {
-  description = "Maximum S3 bucket size in GB"
-  type        = number
-  default     = 500
-
-  validation {
-    condition     = var.s3_max_size_gb >= 500
-    error_message = "s3_max_size_gb must be at least 500 (Civo minimum)"
-  }
+variable "s3_region" {
+  description = "S3 region"
+  type        = string
+  default     = "us-east-1"
 }
 
-variable "create_s3_credentials" {
-  description = "Create new S3 credentials"
-  type        = bool
-  default     = true
+variable "s3_bucket_name" {
+  description = "S3 bucket name for NAR storage (required if use_minio=false)"
+  type        = string
+  default     = ""
 }
 
 variable "s3_access_key_id" {
-  description = "Existing S3 access key ID (required if create_s3_credentials is false)"
+  description = "S3 access key ID (required if use_minio=false)"
   type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "s3_secret_access_key" {
+  description = "S3 secret access key (required if use_minio=false)"
+  type        = string
+  sensitive   = true
   default     = ""
 }
 
 # =============================================================================
-# Attic Authentication
+# Attic Authentication (DISABLED)
 # =============================================================================
-
-variable "attic_jwt_secret_base64" {
-  description = "Base64-encoded RSA private key for JWT signing"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.attic_jwt_secret_base64) > 0
-    error_message = "attic_jwt_secret_base64 is required"
-  }
-}
+# Authentication is disabled for Bates internal network deployment.
+# The cache operates in public read/write mode.
 
 # =============================================================================
 # Attic Chunking Configuration
@@ -526,15 +467,15 @@ variable "enable_ingress" {
 }
 
 variable "ingress_host" {
-  description = "Hostname for ingress"
+  description = "Hostname for ingress (auto-generated from ingress_domain if empty)"
   type        = string
-  default     = "nix-cache.fuzzy-dev.tinyland.dev"
+  default     = ""
 }
 
 variable "ingress_class" {
   description = "Ingress class (traefik, nginx)"
   type        = string
-  default     = "nginx"  # Civo clusters use nginx-ingress by default
+  default     = "traefik" # Bates clusters use traefik by default
 }
 
 variable "enable_tls" {
@@ -552,43 +493,31 @@ variable "cert_manager_issuer" {
 # =============================================================================
 # DNS Configuration
 # =============================================================================
+# DNS is managed externally via Bates College DNS infrastructure.
+# Ingress hosts are configured via ingress_domain variable.
+
+# =============================================================================
+# DNS Configuration (Legacy)
+# =============================================================================
+# These variables are kept for compatibility with the dns-record module.
 
 variable "dns_provider" {
-  description = "DNS provider (dreamhost, external-dns)"
+  description = "DNS provider (external-dns, dreamhost, or none)"
   type        = string
   default     = "external-dns"
-
-  validation {
-    condition     = contains(["dreamhost", "external-dns"], var.dns_provider)
-    error_message = "dns_provider must be one of: dreamhost, external-dns"
-  }
 }
 
 variable "domain" {
   description = "Base domain for DNS records"
   type        = string
-  default     = "fuzzy-dev.tinyland.dev"
+  default     = "beehive.bates.edu"
 }
 
 variable "dreamhost_api_key" {
-  description = "DreamHost API key (required if dns_provider is dreamhost)"
+  description = "Dreamhost API key (only required if dns_provider = dreamhost)"
   type        = string
   default     = ""
   sensitive   = true
-}
-
-# Note: Cloudflare support removed - use external-dns with Cloudflare webhook if needed
-
-variable "enable_staging_dns" {
-  description = "Create staging DNS record"
-  type        = bool
-  default     = false
-}
-
-variable "staging_ingress_host" {
-  description = "Hostname for staging ingress"
-  type        = string
-  default     = "nix-cache-staging.fuzzy-dev.tinyland.dev"
 }
 
 variable "load_balancer_ip" {
@@ -597,141 +526,124 @@ variable "load_balancer_ip" {
   default     = ""
 }
 
-# =============================================================================
-# Token Management Configuration
-# =============================================================================
+variable "enable_staging_dns" {
+  description = "Enable staging DNS record"
+  type        = bool
+  default     = false
+}
 
-variable "enable_token_management" {
-  description = "Enable the token management module"
+# =============================================================================
+# MinIO Storage (Optional - High Performance Cache Storage)
+# =============================================================================
+# MinIO provides self-managed S3-compatible storage optimized for Nix binary
+# cache workloads. When enabled, Attic uses MinIO instead of external S3.
+
+variable "use_minio" {
+  description = "Deploy MinIO for S3 storage instead of external S3"
+  type        = bool
+  default     = false
+}
+
+variable "install_minio_operator" {
+  description = "Install MinIO operator (set to false if already installed)"
   type        = bool
   default     = true
 }
 
-variable "ci_token_validity_days" {
-  description = "Validity period for CI tokens in days"
+variable "minio_operator_namespace" {
+  description = "Namespace for MinIO operator"
+  type        = string
+  default     = "minio-operator"
+}
+
+variable "minio_operator_version" {
+  description = "MinIO operator Helm chart version"
+  type        = string
+  default     = "6.0.4"
+}
+
+variable "minio_distributed_mode" {
+  description = "Use distributed mode (4 servers × 4 drives) for production HA"
+  type        = bool
+  default     = false
+}
+
+variable "minio_volume_size" {
+  description = "Storage size for each MinIO volume (per drive)"
+  type        = string
+  default     = "10Gi"
+}
+
+variable "minio_storage_class" {
+  description = "Kubernetes storage class for MinIO volumes (uses pg_storage_class if empty)"
+  type        = string
+  default     = ""
+}
+
+variable "minio_cpu_request" {
+  description = "CPU request for MinIO pods"
+  type        = string
+  default     = "100m"
+}
+
+variable "minio_cpu_limit" {
+  description = "CPU limit for MinIO pods"
+  type        = string
+  default     = "500m"
+}
+
+variable "minio_memory_request" {
+  description = "Memory request for MinIO pods"
+  type        = string
+  default     = "256Mi"
+}
+
+variable "minio_memory_limit" {
+  description = "Memory limit for MinIO pods"
+  type        = string
+  default     = "512Mi"
+}
+
+variable "minio_root_user" {
+  description = "MinIO root username"
+  type        = string
+  default     = "minioadmin"
+  sensitive   = true
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "minio_bucket_name" {
+  description = "MinIO bucket name for Attic storage"
+  type        = string
+  default     = "attic"
+}
+
+variable "minio_nar_retention_days" {
+  description = "Retention period for NAR files in days"
   type        = number
   default     = 90
-
-  validation {
-    condition     = var.ci_token_validity_days >= 1 && var.ci_token_validity_days <= 365
-    error_message = "ci_token_validity_days must be between 1 and 365"
-  }
 }
 
-variable "service_token_validity_days" {
-  description = "Validity period for service tokens in days"
+variable "minio_chunk_retention_days" {
+  description = "Retention period for chunk files in days"
   type        = number
-  default     = 365
-
-  validation {
-    condition     = var.service_token_validity_days >= 1 && var.service_token_validity_days <= 730
-    error_message = "service_token_validity_days must be between 1 and 730"
-  }
+  default     = 90
 }
 
-variable "root_token_validity_days" {
-  description = "Validity period for root token in days"
-  type        = number
-  default     = 180
-
-  validation {
-    condition     = var.root_token_validity_days >= 1 && var.root_token_validity_days <= 365
-    error_message = "root_token_validity_days must be between 1 and 365"
-  }
-}
-
-variable "ci_tokens" {
-  description = "Map of CI tokens to create. Key is token name, value is config."
-  type = map(object({
-    permissions = list(string)
-    caches      = list(string)
-    description = optional(string, "")
-  }))
-  default = {
-    "gitlab-tinyland-gnucashr" = {
-      permissions = ["push", "pull"]
-      caches      = ["main"]
-      description = "CI token for tinyland/projects/gnucashr"
-    }
-    "gitlab-tinyland-attic-cache" = {
-      permissions = ["push", "pull"]
-      caches      = ["main"]
-      description = "CI token for tinyland/projects/attic-cache"
-    }
-    "github-jesssullivan-gnucashr" = {
-      permissions = ["push", "pull"]
-      caches      = ["main"]
-      description = "CI token for jesssullivan/gnucashr on GitHub"
-    }
-  }
-
-  validation {
-    condition = alltrue([
-      for name, config in var.ci_tokens :
-      alltrue([for perm in config.permissions : contains(["push", "pull", "delete", "admin"], perm)])
-    ])
-    error_message = "permissions must be one of: push, pull, delete, admin"
-  }
-}
-
-variable "readonly_tokens" {
-  description = "Map of read-only tokens to create. Key is token name, value is config."
-  type = map(object({
-    caches      = list(string)
-    description = optional(string, "")
-  }))
-  default = {
-    "public-pull" = {
-      caches      = ["main"]
-      description = "Public read-only access to main cache"
-    }
-  }
-}
-
-variable "service_tokens" {
-  description = "Map of service tokens to create. Key is token name, value is config."
-  type = map(object({
-    permissions = list(string)
-    caches      = list(string)
-    description = optional(string, "")
-  }))
-  default = {
-    "gc-worker" = {
-      permissions = ["admin"]
-      caches      = ["main"]
-      description = "Garbage collector worker token"
-    }
-  }
-
-  validation {
-    condition = alltrue([
-      for name, config in var.service_tokens :
-      alltrue([for perm in config.permissions : contains(["push", "pull", "delete", "admin", "*"], perm)])
-    ])
-    error_message = "permissions must be one of: push, pull, delete, admin, *"
-  }
-}
-
-variable "create_root_token" {
-  description = "Whether to create a root admin token"
+variable "enable_cache_warming" {
+  description = "Enable cache warming CronJob for common flake inputs"
   type        = bool
-  default     = true
+  default     = false
 }
 
-variable "revoked_token_ids" {
-  description = "List of revoked token IDs (JTI claims)"
-  type        = list(string)
-  default     = []
-}
-
-variable "revocation_list_revision" {
-  description = "Revision number for the revocation list"
-  type        = number
-  default     = 1
-}
-
-variable "create_token_accessor_sa" {
-  description = "Create a ServiceAccount with read access to tokens"
-  type        = bool
-  default     = true
-}
+# =============================================================================
+# Token Management (DISABLED)
+# =============================================================================
+# Token management has been removed for Bates internal network deployment.
+# The cache operates in public read/write mode without authentication.

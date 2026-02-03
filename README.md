@@ -1,93 +1,257 @@
-# attic-cache
+# Attic Cache - Bates ILS Nix Binary Cache
 
+Self-hosted Nix binary cache for Bates College infrastructure, deployed to internal Kubernetes clusters using GitLab CI/CD and the GitLab Kubernetes Agent.
 
+## Overview
 
-## Getting started
+Attic is a self-hosted Nix binary cache that stores pre-built Nix derivations, dramatically speeding up builds across CI/CD pipelines and development environments.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### Key Features
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- **Auth-free operation** - Public read/write on internal Bates network
+- **Greedy build pattern** - Immediate cache pushes for resumable builds
+- **Multi-environment** - Development (beehive), staging/production (rigel)
+- **GitLab Kubernetes Agent** - No kubeconfig management required
+- **MinIO integration** - Self-managed S3-compatible storage (default)
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/bates-ils/people/jsullivan2/attic-cache.git
-git branch -M main
-git push -uf origin main
+                      GitLab CI/CD
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │  nix:build   │  │ tofu:plan    │  │   deploy     │
+  │  (greedy)    │  │              │  │              │
+  └──────────────┘  └──────────────┘  └──────────────┘
+         │                   │                   │
+         └───────────────────┼───────────────────┘
+                             │ GitLab K8s Agent
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+         ▼                   ▼                   ▼
+  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+  │   beehive     │   │    rigel      │   │    rigel      │
+  │   (review)    │   │  (staging)    │   │ (production)  │
+  │ *.beehive.    │   │ *.rigel.      │   │ *.rigel.      │
+  │   bates.edu   │   │   bates.edu   │   │   bates.edu   │
+  └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
-## Integrate with your tools
+## Clusters
 
-* [Set up project integrations](https://gitlab.com/bates-ils/people/jsullivan2/attic-cache/-/settings/integrations)
+### Beehive (Development/Review)
+- **Purpose**: Merge request reviews, development testing
+- **GitLab Agent**: `bates-ils/projects/kubernetes/gitlab-agents:beehive`
+- **Domain**: `*.beehive.bates.edu`
+- **Resources**: Minimal (single replica, reduced limits)
 
-## Collaborate with your team
+### Rigel (Staging/Production)
+- **Purpose**: Staging validation, production workloads
+- **GitLab Agent**: `bates-ils/projects/kubernetes/gitlab-agents:rigel`
+- **Domain**: `*.rigel.bates.edu`
+- **Resources**: HA configuration (multiple replicas, PostgreSQL cluster)
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Deployment
 
-## Test and Deploy
+Deployments are fully automated via GitLab CI/CD:
 
-Use the built-in continuous integration in GitLab.
+| Branch/Tag | Environment | Cluster | Auto-deploy |
+|------------|-------------|---------|-------------|
+| Feature/MR | review      | beehive | Yes |
+| main       | staging     | rigel   | Yes |
+| v*.*.* tag | production  | rigel   | Manual |
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Manual Deployment
 
-***
+For local testing (requires GitLab Agent access):
 
-# Editing this README
+```bash
+cd tofu/stacks/attic
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+# Development (beehive)
+tofu init
+tofu plan -var-file=beehive.tfvars
+tofu apply -var-file=beehive.tfvars
 
-## Suggestions for a good README
+# Production (rigel)
+tofu plan -var-file=rigel.tfvars
+tofu apply -var-file=rigel.tfvars
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Configuration
 
-## Name
-Choose a self-explaining name for your project.
+### Environment Variables
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Copy `.env.example` to `.env` and configure:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+# GitLab Kubernetes Agent Context
+KUBE_CONTEXT=bates-ils/projects/kubernetes/gitlab-agents:beehive
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+# Namespace configuration
+NAMESPACE=attic-cache
+KUBE_INGRESS_BASE_DOMAIN=beehive.bates.edu
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# Attic Configuration
+ATTIC_SERVER=https://attic-cache.beehive.bates.edu
+ATTIC_CACHE=main
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Storage Options
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+#### MinIO (Default)
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Both beehive and rigel use MinIO for S3-compatible storage by default (`use_minio=true`). This provides:
+- Self-managed storage within the cluster
+- No external S3 credentials required
+- Automatic bucket lifecycle management
+- PostgreSQL backups to MinIO
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+| Environment | Mode | Drives | Total Storage |
+|-------------|------|--------|---------------|
+| beehive (dev) | Standalone | 1×10Gi | 10Gi |
+| rigel (prod) | Distributed 4×4 | 16×50Gi | 800Gi raw |
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+#### External S3 (Optional)
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+To use external S3 instead of MinIO, set `use_minio=false` in your tfvars and configure these CI/CD variables:
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `S3_ENDPOINT` | S3 endpoint URL | Yes (when use_minio=false) |
+| `S3_ACCESS_KEY_ID` | S3 access key | Yes (masked) |
+| `S3_SECRET_ACCESS_KEY` | S3 secret key | Yes (masked) |
+| `S3_BUCKET_NAME` | S3 bucket name | Yes |
+
+## Using the Cache
+
+### Configure Nix to Use the Cache
+
+Add to your `~/.config/nix/nix.conf` or project's `flake.nix`:
+
+```nix
+# nix.conf
+substituters = https://attic-cache.rigel.bates.edu https://cache.nixos.org
+trusted-substituters = https://attic-cache.rigel.bates.edu
+
+# Or in flake.nix
+{
+  nixConfig = {
+    extra-substituters = [ "https://attic-cache.rigel.bates.edu" ];
+    extra-trusted-substituters = [ "https://attic-cache.rigel.bates.edu" ];
+  };
+}
+```
+
+### Push to Cache (CI/CD)
+
+The greedy build pattern automatically pushes artifacts:
+
+```yaml
+nix:build:
+  script:
+    - nix build .#mypackage --out-link result
+    - nix run .#attic -- push main result || echo "Cache push (non-blocking)"
+```
+
+## Development
+
+### Prerequisites
+
+- Nix with flakes enabled
+- direnv (recommended)
+
+### Local Setup
+
+```bash
+# Enter development shell
+direnv allow
+# or
+nix develop
+
+# Validate configuration
+cd tofu/stacks/attic
+tofu init -backend=false
+tofu validate
+```
+
+### Project Structure
+
+```
+.
+├── .gitlab-ci.yml          # CI/CD pipeline (Bates patterns)
+├── .env.example            # Environment variable template
+├── flake.nix               # Nix development environment
+├── docs/
+│   ├── greedy-build-pattern.md  # Build caching documentation
+│   └── k8s-reference/           # Reference Kubernetes manifests
+├── tofu/
+│   ├── modules/            # Reusable OpenTofu modules
+│   │   ├── cnpg-operator/  # CloudNativePG operator
+│   │   ├── hpa-deployment/ # HPA-enabled deployments
+│   │   ├── minio-operator/ # MinIO operator
+│   │   ├── minio-tenant/   # MinIO tenant (S3 storage)
+│   │   └── postgresql-cnpg/# PostgreSQL cluster
+│   └── stacks/
+│       └── attic/
+│           ├── main.tf         # Main configuration
+│           ├── variables.tf    # Variable definitions
+│           ├── beehive.tfvars  # Dev cluster config
+│           └── rigel.tfvars    # Prod cluster config
+└── scripts/                # Operational scripts
+```
+
+## Greedy Build Pattern
+
+This repository implements the "greedy build → immediately push" pattern for Nix caching:
+
+1. **Build jobs use `needs: []`** - Start immediately, don't wait for validation
+2. **Cache push is non-blocking** - Failures logged but don't fail the job
+3. **Artifacts preserved** - GitLab keeps build artifacts even on downstream failures
+4. **Resumable builds** - Subsequent pipelines leverage cached derivations
+
+See [docs/greedy-build-pattern.md](docs/greedy-build-pattern.md) for details.
+
+## Troubleshooting
+
+### Health Check
+
+```bash
+# Check cache status
+curl https://attic-cache.rigel.bates.edu/nix-cache-info
+
+# Expected output:
+# StoreDir: /nix/store
+# WantMassQuery: 1
+# Priority: 30
+```
+
+### View Logs
+
+```bash
+# Via kubectl (requires cluster access)
+kubectl logs -n attic-cache -l app.kubernetes.io/name=attic -f
+```
+
+### MinIO Status
+
+```bash
+# Check MinIO tenant status
+kubectl get tenant -n attic-cache
+
+# Check MinIO pods
+kubectl get pods -n attic-cache -l app.kubernetes.io/name=minio
+```
+
+### Common Issues
+
+**Cache push fails silently**: Check S3 credentials (or MinIO status) and bucket permissions.
+
+**Slow builds**: Verify the cache is being used with `--print-build-logs`.
+
+**Ingress not working**: Check cert-manager issuer and DNS propagation.
+
+**MinIO not ready**: Check operator logs in `minio-operator` namespace.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Internal Bates College use only.
