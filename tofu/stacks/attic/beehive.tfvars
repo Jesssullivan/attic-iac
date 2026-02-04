@@ -37,7 +37,7 @@ gc_memory_limit   = "128Mi"
 # =============================================================================
 
 use_cnpg_postgres     = true
-install_cnpg_operator = true
+install_cnpg_operator = false  # Use existing CNPG operator on beehive (cluster-wide)
 pg_instances          = 1 # Single instance for dev
 pg_storage_size       = "5Gi"
 pg_storage_class      = "trident-delete" # Bates uses NetApp Trident CSI
