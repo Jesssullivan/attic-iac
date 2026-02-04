@@ -59,7 +59,7 @@ tofu:validate:
   needs:
     - job: tofu:validate
       artifacts: false
-      optional: true  # Don't block plan if validate fails
+      optional: true # Don't block plan if validate fails
   script:
     - |
       echo "=== OpenTofu Plan (${TF_ENVIRONMENT:-default}) ==="

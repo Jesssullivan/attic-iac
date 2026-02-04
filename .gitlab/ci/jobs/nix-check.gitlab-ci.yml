@@ -56,7 +56,14 @@ nix:format:
   extends: .nix-check-base
   script:
     - echo "Checking Nix formatting..."
-    - nix fmt -- --check .
+    # treefmt doesn't support --check flag; run formatter and check for changes
+    - nix fmt .
+    - |
+      if ! git diff --exit-code; then
+        echo "ERROR: Files are not properly formatted. Run 'nix fmt' locally."
+        exit 1
+      fi
+      echo "All files are properly formatted"
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
