@@ -25,9 +25,11 @@
     expire_in: 1 day
 
 # Build Attic client
+# NOTE: allow_failure until Attic cache is deployed - builds take 60+ min uncached
 nix:build-client:
   extends: .nix-build-base
   needs: [] # Run immediately - don't wait for validate stage
+  allow_failure: true
   script:
     - echo "Building Attic client..."
     - nix build .#attic-client --print-build-logs --out-link result-client
@@ -49,9 +51,11 @@ nix:build-client:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # Build Attic server container image
+# NOTE: allow_failure until Attic cache is deployed - builds take 60+ min uncached
 nix:build-container:
   extends: .nix-build-base
   needs: [] # Run immediately - don't wait for validate stage
+  allow_failure: true
   script:
     - echo "Building Attic server container..."
     - nix build .#container --print-build-logs --out-link result-container
@@ -84,9 +88,11 @@ nix:build-container:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # Build GC image
+# NOTE: allow_failure until Attic cache is deployed - builds take 60+ min uncached
 nix:build-gc-image:
   extends: .nix-build-base
   needs: [] # Run immediately - don't wait for validate stage
+  allow_failure: true
   script:
     - echo "Building Attic GC container..."
     - nix build .#attic-gc-image --print-build-logs --out-link result-gc
@@ -97,11 +103,14 @@ nix:build-gc-image:
 # Note: We rebuild the copy-to script here because GitLab artifacts are symlinks
 # to nix store paths that don't exist in the push job's environment.
 # The rebuild is fast when using Attic cache.
+# NOTE: allow_failure until Attic cache is deployed - builds take 60+ min uncached
 nix:push-container:
   extends: .nix-build-base
   stage: deploy
+  allow_failure: true
   needs:
-    - nix:build-container
+    - job: nix:build-container
+      optional: true
   script:
     - echo "Pushing container to registry..."
     - |
