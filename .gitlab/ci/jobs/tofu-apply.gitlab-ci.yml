@@ -171,18 +171,13 @@ tofu:apply:review:
 # Staging Deployment - Auto on main branch (rigel cluster)
 # ==============================================================================
 
+# NOTE: No dependency on nix build jobs - infrastructure deployment doesn't
+# require the container builds to complete. Apply starts immediately after plan.
 tofu:apply:staging:
   extends: .tofu_apply_base
   needs:
     - job: tofu:plan:staging
       artifacts: true
-      optional: true
-    - job: nix:flake-check
-      artifacts: false
-      optional: true
-    - job: nix:build-container
-      artifacts: false
-      optional: true
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: on_success
@@ -204,18 +199,13 @@ tofu:apply:staging:
 # Production Deployment - Auto on semver tags (rigel cluster)
 # ==============================================================================
 
+# NOTE: No dependency on nix build jobs - infrastructure deployment doesn't
+# require the container builds to complete.
 tofu:apply:production:
   extends: .tofu_apply_base
   needs:
     - job: tofu:plan:production
       artifacts: true
-      optional: true
-    - job: nix:flake-check
-      artifacts: false
-      optional: true
-    - job: nix:build-container
-      artifacts: false
-      optional: true
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/'
       when: on_success
