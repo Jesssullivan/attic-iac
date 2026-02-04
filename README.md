@@ -22,19 +22,19 @@ Self-hosted [Attic](https://github.com/zhaofengli/attic) Nix binary cache deploy
 
 **Clusters:**
 
-| Cluster | Purpose | GitLab Agent | Domain |
-|---------|---------|-------------|--------|
-| beehive | Dev/review | `bates-ils/projects/kubernetes/gitlab-agents:beehive` | `*.beehive.bates.edu` |
-| rigel | Staging/production | `bates-ils/projects/kubernetes/gitlab-agents:rigel` | `*.rigel.bates.edu` |
+| Cluster | Purpose            | GitLab Agent                                          | Domain                |
+| ------- | ------------------ | ----------------------------------------------------- | --------------------- |
+| beehive | Dev/review         | `bates-ils/projects/kubernetes/gitlab-agents:beehive` | `*.beehive.bates.edu` |
+| rigel   | Staging/production | `bates-ils/projects/kubernetes/gitlab-agents:rigel`   | `*.rigel.bates.edu`   |
 
 **OpenTofu Modules:**
 
-| Module | Purpose |
-|--------|---------|
-| `hpa-deployment` | HPA-enabled Kubernetes deployments |
+| Module                              | Purpose                                        |
+| ----------------------------------- | ---------------------------------------------- |
+| `hpa-deployment`                    | HPA-enabled Kubernetes deployments             |
 | `cnpg-operator` / `postgresql-cnpg` | CloudNativePG operator and PostgreSQL clusters |
-| `minio-operator` / `minio-tenant` | MinIO operator and S3-compatible storage |
-| `gitlab-runner` | Self-hosted GitLab Runner on Kubernetes |
+| `minio-operator` / `minio-tenant`   | MinIO operator and S3-compatible storage       |
+| `gitlab-runner`                     | Self-hosted GitLab Runner on Kubernetes        |
 
 ## Quick Start
 
@@ -81,24 +81,24 @@ nix:build:
 
 ### Environment Mapping
 
-| Trigger | Environment | Cluster | Auto-deploy |
-|---------|-------------|---------|-------------|
-| Merge request | review | beehive | Yes |
-| `main` branch | staging | rigel | Yes |
-| `v*.*.*` tag | production | rigel | Manual |
+| Trigger       | Environment | Cluster | Auto-deploy |
+| ------------- | ----------- | ------- | ----------- |
+| Merge request | review      | beehive | Yes         |
+| `main` branch | staging     | rigel   | Yes         |
+| `v*.*.*` tag  | production  | rigel   | Manual      |
 
 ### CI/CD Variables
 
 With MinIO (default), S3 variables are **not required**.
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `KUBE_CONTEXT` | Set automatically per environment | No (auto) |
-| `S3_ENDPOINT` | S3 endpoint URL | Only if `use_minio=false` |
-| `S3_ACCESS_KEY_ID` | S3 access key (masked) | Only if `use_minio=false` |
-| `S3_SECRET_ACCESS_KEY` | S3 secret key (masked) | Only if `use_minio=false` |
-| `S3_BUCKET_NAME` | S3 bucket name | Only if `use_minio=false` |
-| `RUNNER_TOKEN` | GitLab Runner registration token | Only for self-hosted runners |
+| Variable               | Description                       | Required                     |
+| ---------------------- | --------------------------------- | ---------------------------- |
+| `KUBE_CONTEXT`         | Set automatically per environment | No (auto)                    |
+| `S3_ENDPOINT`          | S3 endpoint URL                   | Only if `use_minio=false`    |
+| `S3_ACCESS_KEY_ID`     | S3 access key (masked)            | Only if `use_minio=false`    |
+| `S3_SECRET_ACCESS_KEY` | S3 secret key (masked)            | Only if `use_minio=false`    |
+| `S3_BUCKET_NAME`       | S3 bucket name                    | Only if `use_minio=false`    |
+| `RUNNER_TOKEN`         | GitLab Runner registration token  | Only for self-hosted runners |
 
 ## Infrastructure
 
@@ -121,10 +121,10 @@ State is managed by [GitLab-managed Terraform state](https://docs.gitlab.com/ee/
 
 Both clusters use MinIO for S3-compatible storage by default (`use_minio=true`):
 
-| Environment | Mode | Drives | Total Storage |
-|-------------|------|--------|---------------|
-| beehive (dev) | Standalone | 1x10Gi | 10Gi |
-| rigel (prod) | Distributed 4x4 | 16x50Gi | 800Gi raw |
+| Environment   | Mode            | Drives  | Total Storage |
+| ------------- | --------------- | ------- | ------------- |
+| beehive (dev) | Standalone      | 1x10Gi  | 10Gi          |
+| rigel (prod)  | Distributed 4x4 | 16x50Gi | 800Gi raw     |
 
 To use external S3 instead, set `use_minio=false` in your tfvars and configure the S3 CI/CD variables above.
 
