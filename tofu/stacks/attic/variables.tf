@@ -119,6 +119,12 @@ variable "install_cnpg_operator" {
   default     = true
 }
 
+variable "cnpg_operator_create_namespace" {
+  description = "Create the CNPG operator namespace (set false if namespace exists)"
+  type        = bool
+  default     = true
+}
+
 variable "pg_instances" {
   description = "Number of PostgreSQL instances (1=standalone, 3=HA)"
   type        = number
@@ -546,6 +552,12 @@ variable "use_minio" {
 
 variable "install_minio_operator" {
   description = "Install MinIO operator (set to false if already installed)"
+  type        = bool
+  default     = true
+}
+
+variable "minio_operator_create_namespace" {
+  description = "Create the MinIO operator namespace (set false if namespace exists)"
   type        = bool
   default     = true
 }

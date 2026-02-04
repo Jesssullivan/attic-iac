@@ -90,9 +90,10 @@ enable_prometheus_monitoring = false # Disable for dev to reduce resource usage
 # NOTE: Despite minio-operator namespace existing on beehive, the MinIO Operator
 # CRDs are not installed cluster-wide. Must install operator to get CRDs.
 
-use_minio              = true
-install_minio_operator = true  # Required - MinIO CRDs don't exist on beehive
-minio_distributed_mode = false # Single server for dev
+use_minio                       = true
+install_minio_operator          = true  # Required - MinIO CRDs don't exist on beehive
+minio_operator_create_namespace = false # Namespace exists but operator/CRDs don't
+minio_distributed_mode          = false # Single server for dev
 minio_volume_size      = "10Gi"
 minio_storage_class    = "trident-delete"
 

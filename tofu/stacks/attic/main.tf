@@ -136,7 +136,7 @@ module "cnpg_operator" {
   source = "../../modules/cnpg-operator"
 
   namespace        = var.cnpg_operator_namespace
-  create_namespace = true
+  create_namespace = var.cnpg_operator_create_namespace
   chart_version    = var.cnpg_chart_version
 
   operator_replicas       = 1
@@ -158,7 +158,7 @@ module "minio_operator" {
   source = "../../modules/minio-operator"
 
   namespace        = var.minio_operator_namespace
-  create_namespace = true
+  create_namespace = var.minio_operator_create_namespace
   operator_version = var.minio_operator_version
 
   operator_replicas       = 1
