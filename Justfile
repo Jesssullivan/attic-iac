@@ -412,8 +412,8 @@ attic-status:
     just k8s-all attic-cache
 
 # Run health check script
-attic-health endpoint="https://attic-cache.{{ingress_domain}}":
-    ./scripts/health-check.sh -e {{endpoint}} -n attic-cache
+attic-health endpoint="https://attic-cache.{{ingress_domain}}" namespace="attic-cache":
+    ./scripts/health-check.sh -u {{endpoint}} -n {{namespace}} -v
 
 # =============================================================================
 # Formatting Commands
@@ -508,6 +508,6 @@ ci-local: fmt-check nix-check nix-build tofu-validate-all
     @echo ""
     @echo "=== CI checks passed! ==="
 
-# Run CI health check script
-ci-health:
-    ./scripts/ci-health-check.sh
+# Run CI health check (quick mode, no K8s checks)
+ci-health endpoint="https://attic-cache.{{ingress_domain}}":
+    ./scripts/health-check.sh -u {{endpoint}} -m 5 -d 10 -M 30

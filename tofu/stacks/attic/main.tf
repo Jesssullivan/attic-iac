@@ -128,6 +128,31 @@ locals {
 }
 
 # =============================================================================
+# Input Validation
+# =============================================================================
+
+# Validate database_url is not a placeholder when CNPG is disabled
+check "database_url_required" {
+  assert {
+    condition     = var.use_cnpg_postgres || !can(regex("placeholder", var.database_url))
+    error_message = "database_url cannot contain 'placeholder' when use_cnpg_postgres is false. Provide a real PostgreSQL connection string."
+  }
+}
+
+# Validate S3 config is provided when MinIO is disabled
+check "s3_config_required" {
+  assert {
+    condition = var.use_minio || (
+      var.s3_endpoint != "" &&
+      var.s3_bucket_name != "" &&
+      var.s3_access_key_id != "" &&
+      var.s3_secret_access_key != ""
+    )
+    error_message = "S3 configuration (s3_endpoint, s3_bucket_name, s3_access_key_id, s3_secret_access_key) is required when use_minio is false."
+  }
+}
+
+# =============================================================================
 # CloudNativePG Operator (Cluster-Wide)
 # =============================================================================
 

@@ -12,29 +12,30 @@
 #   ./scripts/init-cache.sh [options]
 #
 # Options:
-#   -e, --endpoint     Attic server URL (default: https://nix-cache.fuzzy-dev.tinyland.dev)
-#   -n, --name         Server name for CLI config (default: tinyland)
+#   -e, --endpoint     Attic server URL (default: https://attic-cache.beehive.bates.edu)
+#   -n, --name         Server name for CLI config (default: bates)
 #   -c, --cache        Cache name to create (default: main)
 #   -p, --public       Make the cache public (default: true)
-#   -t, --token        Attic authentication token (or use ATTIC_TOKEN env var)
-#   -k, --namespace    Kubernetes namespace for token retrieval (default: nix-cache)
+#   -t, --token        Attic authentication token (not needed for auth-free mode)
+#   -k, --namespace    Kubernetes namespace for token retrieval (default: attic-cache)
+#   --auth-free        Use auth-free mode (default for Bates deployment)
+#   --require-auth     Require authentication (override auth-free default)
 #   -v, --verbose      Enable verbose output
 #   -h, --help         Show this help message
 #
 # Prerequisites:
 #   - attic CLI installed (nix shell nixpkgs#attic-client)
-#   - Root or admin token with cache creation permissions
+#   - For auth mode: Root or admin token with cache creation permissions
 #
 # Examples:
-#   # Initialize with token from environment
-#   export ATTIC_TOKEN='eyJ...'
+#   # Initialize for Bates deployment (auth-free mode, default)
 #   ./scripts/init-cache.sh
 #
-#   # Initialize with token from Kubernetes secret
-#   ./scripts/init-cache.sh -k nix-cache
+#   # Initialize for rigel production
+#   ./scripts/init-cache.sh -e https://attic-cache.rigel.bates.edu
 #
-#   # Create a private cache
-#   ./scripts/init-cache.sh -c private-cache -p false
+#   # Initialize with authentication (non-Bates deployment)
+#   ./scripts/init-cache.sh --require-auth -t 'eyJ...'
 
 set -euo pipefail
 
@@ -43,13 +44,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
-ENDPOINT="https://nix-cache.fuzzy-dev.tinyland.dev"
-SERVER_NAME="tinyland"
+ENDPOINT="https://attic-cache.beehive.bates.edu"
+SERVER_NAME="bates"
 CACHE_NAME="main"
 MAKE_PUBLIC=true
 TOKEN="${ATTIC_TOKEN:-}"
-NAMESPACE="nix-cache"
+NAMESPACE="attic-cache"
 VERBOSE=false
+AUTH_FREE=true  # Bates deployment uses auth-free mode by default
 
 # Colors
 if [[ -t 1 ]]; then
@@ -103,8 +105,10 @@ Options:
     -n, --name         Server name for CLI config (default: $SERVER_NAME)
     -c, --cache        Cache name to create (default: $CACHE_NAME)
     -p, --public       Make the cache public (default: true)
-    -t, --token        Attic authentication token
+    -t, --token        Attic authentication token (not needed for auth-free mode)
     -k, --namespace    Kubernetes namespace for token retrieval
+    --auth-free        Use auth-free mode (default for Bates deployment)
+    --require-auth     Require authentication (override auth-free default)
     -v, --verbose      Enable verbose output
     -h, --help         Show this help message
 
@@ -155,6 +159,14 @@ parse_args() {
       ;;
     -v | --verbose)
       VERBOSE=true
+      shift
+      ;;
+    --auth-free)
+      AUTH_FREE=true
+      shift
+      ;;
+    --require-auth)
+      AUTH_FREE=false
       shift
       ;;
     -h | --help)
@@ -228,8 +240,13 @@ retrieve_token_from_k8s() {
   return 1
 }
 
-# Validate token
+# Validate token (skipped in auth-free mode)
 validate_token() {
+  if $AUTH_FREE; then
+    log_info "Auth-free mode enabled - skipping token validation"
+    return 0
+  fi
+
   if [[ -z $TOKEN ]]; then
     log_warn "No token provided"
 
@@ -243,6 +260,7 @@ validate_token() {
 
     log_error "No authentication token available"
     log_error "Provide via -t flag, ATTIC_TOKEN env var, or ensure kubectl access to secrets"
+    log_error "Or use --auth-free for public caches"
     exit 1
   fi
 
@@ -275,12 +293,30 @@ configure_cli() {
   # Login to server
   log_info "Logging in to $SERVER_NAME..."
 
-  if ! attic login "$SERVER_NAME" "$ENDPOINT" "$TOKEN"; then
-    log_error "Failed to login to Attic server"
-    exit 1
-  fi
+  if $AUTH_FREE; then
+    # Auth-free mode: login without token (anonymous access)
+    if ! attic login "$SERVER_NAME" "$ENDPOINT"; then
+      log_warn "Login command failed - this may be expected for auth-free servers"
+      log_info "Attempting to configure manually..."
+      # Create config directly for auth-free access
+      cat > "$config_dir/config.toml" <<EOF
+default-server = "$SERVER_NAME"
 
-  log_success "Attic CLI configured for $SERVER_NAME"
+[servers.$SERVER_NAME]
+endpoint = "$ENDPOINT"
+EOF
+      log_success "Attic CLI configured manually for auth-free access"
+    else
+      log_success "Attic CLI configured for $SERVER_NAME"
+    fi
+  else
+    # Authenticated mode: login with token
+    if ! attic login "$SERVER_NAME" "$ENDPOINT" "$TOKEN"; then
+      log_error "Failed to login to Attic server"
+      exit 1
+    fi
+    log_success "Attic CLI configured for $SERVER_NAME"
+  fi
 
   # Show current configuration
   log_debug "Attic config location: $config_dir/config.toml"
@@ -469,8 +505,14 @@ main() {
   echo ""
   log_info "Next steps:"
   echo "  1. Add the public key to your nix.conf or flake.nix"
-  echo "  2. Configure CI with ATTIC_SERVER and ATTIC_TOKEN variables"
-  echo "  3. Push your first derivation: attic push $SERVER_NAME:$CACHE_NAME ./result"
+  if $AUTH_FREE; then
+    echo "  2. Push derivations: attic push $SERVER_NAME:$CACHE_NAME ./result"
+    echo ""
+    echo "  Note: Auth-free mode - no ATTIC_TOKEN needed for CI"
+  else
+    echo "  2. Configure CI with ATTIC_SERVER and ATTIC_TOKEN variables"
+    echo "  3. Push your first derivation: attic push $SERVER_NAME:$CACHE_NAME ./result"
+  fi
   echo ""
 }
 

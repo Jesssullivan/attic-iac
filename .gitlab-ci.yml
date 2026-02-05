@@ -41,18 +41,19 @@ variables:
   FIXED_SUBDOMAIN: "attic-cache"
 
   # Beehive cluster (review/dev)
-  REVIEW_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
-  KUBE_INGRESS_BASE_DOMAIN: beehive.bates.edu
-  KUBE_CONTEXT: $REVIEW_CONTEXT
+  REVIEW_CLUSTER_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
+  REVIEW_INGRESS_DOMAIN: beehive.bates.edu
+  REVIEW_NAMESPACE: ${NAMESPACE}-review
 
   # Rigel cluster (staging/production)
-  STAGING_PROD_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
-  STAGING_KUBE_INGRESS_BASE_DOMAIN: rigel.bates.edu
+  STAGING_CLUSTER_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
+  STAGING_INGRESS_DOMAIN: rigel.bates.edu
+  STAGING_NAMESPACE: ${NAMESPACE}-staging
+  PROD_NAMESPACE: ${NAMESPACE}
 
-  # Namespace per environment
-  REVIEW_NS: ${NAMESPACE}-review
-  STAGING_NS: ${NAMESPACE}-staging
-  PROD_NS: ${NAMESPACE}
+  # Default context for pipeline (review environment)
+  KUBE_CONTEXT: $REVIEW_CLUSTER_CONTEXT
+  KUBE_INGRESS_BASE_DOMAIN: $REVIEW_INGRESS_DOMAIN
 
   # OpenTofu settings
   TF_IN_AUTOMATION: "true"
@@ -105,6 +106,8 @@ include:
   - local: ".gitlab/ci/jobs/nix-build.gitlab-ci.yml"
   # Bazel validation and build jobs (with remote cache)
   - local: ".gitlab/ci/jobs/bazel-build.gitlab-ci.yml"
+  # Health check template
+  - local: ".gitlab/ci/templates/verify-health.gitlab-ci.yml"
 
 # ==============================================================================
 # Verify Stage - Health Checks
@@ -264,139 +267,38 @@ debug:auto:beehive:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 verify:health:review:
-  stage: verify
-  image: curlimages/curl:latest
+  extends: .verify_health
   needs:
     - job: tofu:apply:review
       optional: true
   variables:
-    HEALTH_MAX_ATTEMPTS: "15"
-    HEALTH_INITIAL_DELAY: "30"
-    HEALTH_MAX_DELAY: "60"
-  script:
-    - |
-      # Use root endpoint for health check - Attic serves HTML at /
-      # /nix-cache-info requires a cache name prefix: /{cache}/nix-cache-info
-      HEALTH_URL="https://${FIXED_SUBDOMAIN}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}/"
-      echo "=== Health Check (Review Environment) ==="
-      echo "URL: ${HEALTH_URL}"
-      echo "Max attempts: ${HEALTH_MAX_ATTEMPTS}, Initial delay: ${HEALTH_INITIAL_DELAY}s"
-      echo ""
-
-      DELAY=${HEALTH_INITIAL_DELAY}
-      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
-        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
-        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
-
-        if [ "$HTTP_CODE" = "200" ]; then
-          echo ""
-          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
-          curl -sS "$HEALTH_URL"
-          exit 0
-        fi
-
-        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
-        sleep ${DELAY}
-
-        # Exponential backoff
-        DELAY=$((DELAY + 15))
-        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
-      done
-
-      echo ""
-      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
-      echo "Operators may still be initializing. The deployment will become ready once dependencies are available."
-      exit 1
+    # Review environments use dynamic hostname with branch slug
+    HEALTH_URL: "https://${FIXED_SUBDOMAIN}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}/"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  allow_failure: true
 
 verify:health:staging:
-  stage: verify
-  image: curlimages/curl:latest
+  extends: .verify_health
   needs:
     - job: tofu:apply:staging
       optional: true
   variables:
-    HEALTH_MAX_ATTEMPTS: "15"
-    HEALTH_INITIAL_DELAY: "30"
-    HEALTH_MAX_DELAY: "60"
-  script:
-    - |
-      # Use root endpoint for health check - Attic serves HTML at /
-      # /nix-cache-info requires a cache name prefix: /{cache}/nix-cache-info
-      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/"
-      echo "=== Health Check (Staging Environment) ==="
-      echo "URL: ${HEALTH_URL}"
-      echo ""
-
-      DELAY=${HEALTH_INITIAL_DELAY}
-      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
-        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
-        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
-
-        if [ "$HTTP_CODE" = "200" ]; then
-          echo ""
-          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
-          curl -sS "$HEALTH_URL"
-          exit 0
-        fi
-
-        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
-        sleep ${DELAY}
-
-        DELAY=$((DELAY + 15))
-        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
-      done
-
-      echo ""
-      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
-      exit 1
+    # Staging uses fixed hostname on rigel domain
+    HEALTH_URL: "https://${FIXED_SUBDOMAIN}.${STAGING_INGRESS_DOMAIN}/"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  allow_failure: true
 
 verify:health:production:
-  stage: verify
-  image: curlimages/curl:latest
+  extends: .verify_health
   needs:
     - job: tofu:apply:production
       optional: true
   variables:
+    # Production uses fixed hostname on rigel domain
+    HEALTH_URL: "https://${FIXED_SUBDOMAIN}.${STAGING_INGRESS_DOMAIN}/"
+    # Faster checks for production (already deployed, should be healthy)
     HEALTH_MAX_ATTEMPTS: "10"
     HEALTH_INITIAL_DELAY: "15"
     HEALTH_MAX_DELAY: "30"
-  script:
-    - |
-      # Use root endpoint for health check - Attic serves HTML at /
-      # /nix-cache-info requires a cache name prefix: /{cache}/nix-cache-info
-      HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/"
-      echo "=== Health Check (Production Environment) ==="
-      echo "URL: ${HEALTH_URL}"
-      echo ""
-
-      DELAY=${HEALTH_INITIAL_DELAY}
-      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
-        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
-        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
-
-        if [ "$HTTP_CODE" = "200" ]; then
-          echo ""
-          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
-          curl -sS "$HEALTH_URL"
-          exit 0
-        fi
-
-        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
-        sleep ${DELAY}
-
-        DELAY=$((DELAY + 15))
-        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
-      done
-
-      echo ""
-      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
-      exit 1
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
-  allow_failure: true

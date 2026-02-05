@@ -1,0 +1,52 @@
+# Verify Health Template
+# ======================
+#
+# Reusable template for health check verification jobs.
+# Uses scripts/health-check.sh for unified health checking.
+#
+# Required variables when extending:
+#   HEALTH_URL: Full URL to health check endpoint
+#
+# Optional overrides:
+#   HEALTH_MAX_ATTEMPTS: Max retry attempts (default: 15)
+#   HEALTH_INITIAL_DELAY: Initial delay in seconds (default: 30)
+#   HEALTH_MAX_DELAY: Max delay between retries (default: 60)
+
+.verify_health:
+  stage: verify
+  image: curlimages/curl:latest
+  variables:
+    HEALTH_MAX_ATTEMPTS: "15"
+    HEALTH_INITIAL_DELAY: "30"
+    HEALTH_MAX_DELAY: "60"
+  script:
+    - |
+      echo "=== Health Check ==="
+      echo "URL: ${HEALTH_URL}"
+      echo "Max attempts: ${HEALTH_MAX_ATTEMPTS}, Initial delay: ${HEALTH_INITIAL_DELAY}s"
+      echo ""
+
+      DELAY=${HEALTH_INITIAL_DELAY}
+      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
+        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
+        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo ""
+          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
+          curl -sS "$HEALTH_URL"
+          exit 0
+        fi
+
+        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
+        sleep ${DELAY}
+
+        # Exponential backoff
+        DELAY=$((DELAY + 15))
+        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
+      done
+
+      echo ""
+      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
+      exit 1
+  allow_failure: true
