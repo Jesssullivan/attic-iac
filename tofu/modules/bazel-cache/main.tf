@@ -59,6 +59,10 @@ locals {
   # Service endpoints
   grpc_port = 9092
   http_port = 8080
+
+  # Strip scheme from S3 endpoint (bazel-remote expects host:port, not full URL)
+  # Removes http:// or https:// prefix
+  s3_endpoint_host = replace(replace(var.s3_endpoint, "https://", ""), "http://", "")
 }
 
 # =============================================================================
@@ -86,7 +90,7 @@ resource "kubernetes_config_map_v1" "config" {
 
       # S3/MinIO backend
       s3_proxy = {
-        endpoint           = var.s3_endpoint
+        endpoint           = local.s3_endpoint_host
         bucket             = var.s3_bucket
         prefix             = var.s3_prefix
         auth_method        = "access_key"
