@@ -108,3 +108,117 @@ bazel:test:
     - nix develop --command bazel test //tests:config_validation --test_output=all
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =============================================================================
+# Affected Target Analysis (Incremental Validation)
+# =============================================================================
+# Only validate changed OpenTofu modules to improve CI performance.
+# Uses git diff to detect changed files and maps them to Bazel targets.
+
+# Validate only affected OpenTofu modules
+bazel:affected-modules:
+  extends: .bazel-base
+  stage: validate
+  script:
+    - |
+      echo "=== Affected OpenTofu Module Analysis ==="
+
+      # Get the base commit (merge base with main)
+      BASE_COMMIT=$(git merge-base origin/${CI_DEFAULT_BRANCH:-main} HEAD 2>/dev/null || echo "HEAD~1")
+      echo "Base commit: ${BASE_COMMIT}"
+      echo "Head commit: ${CI_COMMIT_SHA}"
+
+      # Get changed .tf files
+      CHANGED_FILES=$(git diff --name-only ${BASE_COMMIT} HEAD -- 'tofu/modules/**/*.tf' 2>/dev/null || true)
+
+      if [ -z "$CHANGED_FILES" ]; then
+        echo "No OpenTofu module changes detected, skipping validation"
+        exit 0
+      fi
+
+      echo ""
+      echo "Changed OpenTofu files:"
+      echo "$CHANGED_FILES"
+      echo ""
+
+      # Extract unique module names from changed files
+      AFFECTED_MODULES=$(echo "$CHANGED_FILES" | \
+        grep -oP 'tofu/modules/\K[^/]+' | \
+        sort -u | \
+        tr '\n' ' ')
+
+      echo "Affected modules: ${AFFECTED_MODULES}"
+      echo ""
+
+      # Build validation targets for affected modules
+      VALIDATION_TARGETS=""
+      for module in $AFFECTED_MODULES; do
+        # Convert kebab-case to snake_case for Bazel target names
+        target_name=$(echo "$module" | tr '-' '_')
+        VALIDATION_TARGETS="${VALIDATION_TARGETS} //tofu/modules:${target_name}_validate"
+      done
+
+      if [ -n "$VALIDATION_TARGETS" ]; then
+        echo "Running validation for:${VALIDATION_TARGETS}"
+        nix develop --command bazel build $VALIDATION_TARGETS || {
+          echo "ERROR: Module validation failed"
+          exit 1
+        }
+        echo ""
+        echo "=== All affected modules validated successfully ==="
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - tofu/modules/**/*.tf
+  allow_failure: false
+
+# Format check only affected OpenTofu modules
+bazel:affected-fmt:
+  extends: .bazel-base
+  stage: validate
+  script:
+    - |
+      echo "=== Affected OpenTofu Format Check ==="
+
+      BASE_COMMIT=$(git merge-base origin/${CI_DEFAULT_BRANCH:-main} HEAD 2>/dev/null || echo "HEAD~1")
+
+      # Get changed .tf files
+      CHANGED_FILES=$(git diff --name-only ${BASE_COMMIT} HEAD -- 'tofu/modules/**/*.tf' 2>/dev/null || true)
+
+      if [ -z "$CHANGED_FILES" ]; then
+        echo "No OpenTofu module changes detected, skipping format check"
+        exit 0
+      fi
+
+      # Extract unique module names
+      AFFECTED_MODULES=$(echo "$CHANGED_FILES" | \
+        grep -oP 'tofu/modules/\K[^/]+' | \
+        sort -u | \
+        tr '\n' ' ')
+
+      echo "Checking formatting for modules: ${AFFECTED_MODULES}"
+
+      # Run tofu fmt check on affected modules
+      FAILED=0
+      for module in $AFFECTED_MODULES; do
+        echo ""
+        echo "Checking: tofu/modules/${module}"
+        if ! tofu fmt -check -recursive "tofu/modules/${module}" 2>&1; then
+          FAILED=1
+        fi
+      done
+
+      if [ $FAILED -eq 1 ]; then
+        echo ""
+        echo "ERROR: Some modules need formatting. Run: tofu fmt -recursive tofu/modules/"
+        exit 1
+      fi
+
+      echo ""
+      echo "=== All affected modules properly formatted ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - tofu/modules/**/*.tf
+  allow_failure: false

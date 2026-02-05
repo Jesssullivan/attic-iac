@@ -1,7 +1,8 @@
 """Attic Cache - Bazel Module Configuration
 
-Bazel is used for validation and artifact bundling.
-Nix handles all binary builds and container images.
+Bazel is used for validation, artifact bundling, and toolchain management.
+Nix handles binary builds and container images, with Bazel using Nix-provided
+toolchains via rules_nixpkgs for reproducible builds.
 """
 
 module(
@@ -9,13 +10,90 @@ module(
     version = "0.1.0",
 )
 
-# Core Bazel rules for validation and bundling
+# =============================================================================
+# Core Bazel Rules
+# =============================================================================
+
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "rules_pkg", version = "1.1.0")
 bazel_dep(name = "rules_shell", version = "0.6.0")
+bazel_dep(name = "platforms", version = "0.0.10")
 
-# Note: Container builds are handled entirely by Nix (nix2container)
+# =============================================================================
+# rules_nixpkgs - Nix Toolchain Integration
+# =============================================================================
+# Provides reproducible toolchains from Nix for Bazel builds.
+# All build tools come from the flake.nix, ensuring consistency with
+# NixOS/nix-darwin/devShell environments.
+
+bazel_dep(name = "rules_nixpkgs_core", version = "0.13.0")
+
+# Language-specific Nix toolchain rules (add as needed)
+# bazel_dep(name = "rules_nixpkgs_cc", version = "0.13.0")
+# bazel_dep(name = "rules_nixpkgs_go", version = "0.13.0")
+# bazel_dep(name = "rules_nixpkgs_python", version = "0.13.0")
+# bazel_dep(name = "rules_nixpkgs_rust", version = "0.13.0")
+
+# =============================================================================
+# Nix Repository Configuration
+# =============================================================================
+# Configure nixpkgs from the flake.lock for reproducibility
+
+nix_repo = use_extension("@rules_nixpkgs_core//nixpkgs:extensions.bzl", "nix_repo")
+
+# Use the project's flake.lock as the Nix source
+nix_repo.file(
+    name = "nixpkgs",
+    file = "//:flake.lock",
+    file_deps = ["//:flake.nix"],
+)
+
+use_repo(nix_repo, "nixpkgs")
+
+# =============================================================================
+# Nix Package Imports
+# =============================================================================
+# Import specific packages from nixpkgs for use in Bazel rules
+
+nix_pkg = use_extension("@rules_nixpkgs_core//nixpkgs:extensions.bzl", "nix_pkg")
+
+# OpenTofu for module validation
+nix_pkg.package(
+    name = "tofu",
+    attribute_path = "opentofu",
+    repository = "@nixpkgs",
+)
+
+# kubectl for K8s manifest validation
+nix_pkg.package(
+    name = "kubectl",
+    attribute_path = "kubectl",
+    repository = "@nixpkgs",
+)
+
+# yq for YAML processing
+nix_pkg.package(
+    name = "yq",
+    attribute_path = "yq-go",
+    repository = "@nixpkgs",
+)
+
+use_repo(nix_pkg, "kubectl", "tofu", "yq")
+
+# =============================================================================
+# Build Configuration Notes
+# =============================================================================
+#
+# This module is optimized for IaC validation, not binary compilation.
+# Binary builds (Attic server, containers) are handled by Nix:
+#   - nix build .#attic
+#   - nix build .#container
+#
 # Bazel focuses on:
-# 1. Validating Kubernetes manifests
-# 2. Bundling deployment artifacts
-# 3. Running configuration tests
+# 1. Validating OpenTofu modules (//tofu/modules:all_validate)
+# 2. Checking file formatting (//tofu/modules:all_fmt_test)
+# 3. Bundling deployment artifacts (//:deployment_bundle)
+# 4. Running configuration tests (//tests:*)
+#
+# Remote caching via bazel-remote (when deployed):
+#   bazel build --config=ci-cached //...

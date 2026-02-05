@@ -1,0 +1,8 @@
+# OpenTofu Bazel Rules Package
+#
+# Custom rules for validating and formatting OpenTofu modules.
+
+package(default_visibility = ["//visibility:public"])
+
+# Export the rules file
+exports_files(["rules.bzl"])
