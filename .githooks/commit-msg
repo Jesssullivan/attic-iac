@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Commit-msg hook for attic-cache repository
+# Install: git config core.hooksPath .githooks
+#
+# This hook enforces:
+# 1. No Co-Authored-By lines in commit messages
+# 2. Conventional commit format (optional warning)
+
+set -euo pipefail
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+ERRORS=0
+
+# =============================================================================
+# 1. STRIP CO-AUTHORED-BY LINES
+# =============================================================================
+# Automatically remove any Co-Authored-By lines
+if grep -qi "co-authored-by" "$COMMIT_MSG_FILE"; then
+    echo -e "${YELLOW}Removing Co-Authored-By lines from commit message...${NC}"
+    # Remove Co-Authored-By lines and trailing blank lines
+    sed -i.bak '/^[Cc]o-[Aa]uthored-[Bb]y:/d' "$COMMIT_MSG_FILE"
+    rm -f "${COMMIT_MSG_FILE}.bak"
+
+    # Remove trailing blank lines
+    sed -i.bak -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$COMMIT_MSG_FILE" 2>/dev/null || true
+    rm -f "${COMMIT_MSG_FILE}.bak"
+
+    echo -e "${GREEN}Co-Authored-By lines removed${NC}"
+fi
+
+# =============================================================================
+# 2. CONVENTIONAL COMMIT FORMAT (Warning only)
+# =============================================================================
+# Check for conventional commit format: type(scope): description
+FIRST_LINE=$(head -1 "$COMMIT_MSG_FILE")
+
+# Skip merge commits
+if echo "$FIRST_LINE" | grep -qE '^Merge '; then
+    exit 0
+fi
+
+# Conventional commit pattern
+CONVENTIONAL_PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+'
+
+if ! echo "$FIRST_LINE" | grep -qE "$CONVENTIONAL_PATTERN"; then
+    echo -e "${YELLOW}WARNING: Commit message doesn't follow conventional commit format${NC}"
+    echo "  Expected: type(scope): description"
+    echo "  Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+    echo "  Example: feat(ci): add pre-commit hooks for secret detection"
+    echo ""
+    echo "  Your message: $FIRST_LINE"
+    echo ""
+    # Warning only, don't block
+fi
+
+# =============================================================================
+# FINAL RESULT
+# =============================================================================
+if [ $ERRORS -gt 0 ]; then
+    echo -e "${RED}Commit message validation failed${NC}"
+    exit 1
+fi
+
+exit 0

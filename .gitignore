@@ -77,3 +77,21 @@ kubeconfig*
 
 # Claude Code cache keys (public, not secret)
 public-key.txt
+
+# Claude AI assistant files (never commit)
+.claude/
+CLAUDE.md
+CLAUDE.txt
+claude.md
+*.claude.*
+
+# Credentials and tokens
+credentials.json
+**/credentials/**
+token.json
+*token*.json
+*.credentials
+
+# Local development overrides
+local.tfvars
+*.local.tfvars

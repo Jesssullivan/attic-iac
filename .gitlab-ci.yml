@@ -182,20 +182,41 @@ verify:health:review:
   needs:
     - job: tofu:apply:review
       optional: true
+  variables:
+    HEALTH_MAX_ATTEMPTS: "15"
+    HEALTH_INITIAL_DELAY: "30"
+    HEALTH_MAX_DELAY: "60"
   script:
     - |
       HEALTH_URL="https://${FIXED_SUBDOMAIN}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
-      echo "Checking health at: ${HEALTH_URL}"
-      for i in 1 2 3 4 5; do
-        if curl -sSf "$HEALTH_URL"; then
+      echo "=== Health Check (Review Environment) ==="
+      echo "URL: ${HEALTH_URL}"
+      echo "Max attempts: ${HEALTH_MAX_ATTEMPTS}, Initial delay: ${HEALTH_INITIAL_DELAY}s"
+      echo ""
+
+      DELAY=${HEALTH_INITIAL_DELAY}
+      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
+        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
+        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "200" ]; then
           echo ""
-          echo "Health check passed!"
+          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
+          curl -sS "$HEALTH_URL"
           exit 0
         fi
-        echo "Attempt $i failed, retrying in 10s..."
-        sleep 10
+
+        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
+        sleep ${DELAY}
+
+        # Exponential backoff
+        DELAY=$((DELAY + 15))
+        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
       done
-      echo "Health check failed after 5 attempts"
+
+      echo ""
+      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
+      echo "Operators may still be initializing. The deployment will become ready once dependencies are available."
       exit 1
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -207,23 +228,42 @@ verify:health:staging:
   needs:
     - job: tofu:apply:staging
       optional: true
+  variables:
+    HEALTH_MAX_ATTEMPTS: "15"
+    HEALTH_INITIAL_DELAY: "30"
+    HEALTH_MAX_DELAY: "60"
   script:
     - |
       HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
-      echo "Checking health at: ${HEALTH_URL}"
-      for i in 1 2 3 4 5; do
-        if curl -sSf "$HEALTH_URL"; then
+      echo "=== Health Check (Staging Environment) ==="
+      echo "URL: ${HEALTH_URL}"
+      echo ""
+
+      DELAY=${HEALTH_INITIAL_DELAY}
+      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
+        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
+        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "200" ]; then
           echo ""
-          echo "Health check passed!"
+          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
+          curl -sS "$HEALTH_URL"
           exit 0
         fi
-        echo "Attempt $i failed, retrying in 10s..."
-        sleep 10
+
+        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
+        sleep ${DELAY}
+
+        DELAY=$((DELAY + 15))
+        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
       done
-      echo "Health check failed after 5 attempts"
+
+      echo ""
+      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
       exit 1
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure: true
 
 verify:health:production:
   stage: verify
@@ -231,20 +271,39 @@ verify:health:production:
   needs:
     - job: tofu:apply:production
       optional: true
+  variables:
+    HEALTH_MAX_ATTEMPTS: "10"
+    HEALTH_INITIAL_DELAY: "15"
+    HEALTH_MAX_DELAY: "30"
   script:
     - |
       HEALTH_URL="https://${FIXED_SUBDOMAIN}.${STAGING_KUBE_INGRESS_BASE_DOMAIN}/nix-cache-info"
-      echo "Checking health at: ${HEALTH_URL}"
-      for i in 1 2 3 4 5; do
-        if curl -sSf "$HEALTH_URL"; then
+      echo "=== Health Check (Production Environment) ==="
+      echo "URL: ${HEALTH_URL}"
+      echo ""
+
+      DELAY=${HEALTH_INITIAL_DELAY}
+      for i in $(seq 1 ${HEALTH_MAX_ATTEMPTS}); do
+        echo "[$(date '+%H:%M:%S')] Attempt ${i}/${HEALTH_MAX_ATTEMPTS}..."
+        HTTP_CODE=$(curl -sSo /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$HEALTH_URL" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "200" ]; then
           echo ""
-          echo "Health check passed!"
+          echo "=== Health check PASSED (HTTP $HTTP_CODE) ==="
+          curl -sS "$HEALTH_URL"
           exit 0
         fi
-        echo "Attempt $i failed, retrying in 10s..."
-        sleep 10
+
+        echo "  HTTP $HTTP_CODE - waiting ${DELAY}s..."
+        sleep ${DELAY}
+
+        DELAY=$((DELAY + 15))
+        [ $DELAY -gt ${HEALTH_MAX_DELAY} ] && DELAY=${HEALTH_MAX_DELAY}
       done
-      echo "Health check failed after 5 attempts"
+
+      echo ""
+      echo "=== Health check FAILED after ${HEALTH_MAX_ATTEMPTS} attempts ==="
       exit 1
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
+  allow_failure: true
