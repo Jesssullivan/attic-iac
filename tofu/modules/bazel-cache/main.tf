@@ -174,8 +174,10 @@ resource "kubernetes_deployment_v1" "main" {
 
           # Config file + S3 credentials passed via CLI args
           # Note: $(VAR) syntax is Kubernetes env var expansion, not shell expansion
+          # s3.auth_method is required when using s3.access_key_id
           args = [
             "--config_file=/etc/bazel-remote/config.yaml",
+            "--s3.auth_method=access_key",
             "--s3.access_key_id=$(BAZEL_REMOTE_S3_ACCESS_KEY_ID)",
             "--s3.secret_access_key=$(BAZEL_REMOTE_S3_SECRET_ACCESS_KEY)"
           ]
