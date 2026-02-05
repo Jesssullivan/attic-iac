@@ -661,6 +661,78 @@ variable "enable_cache_warming" {
 }
 
 # =============================================================================
+# Bazel Remote Cache Configuration
+# =============================================================================
+# Optional bazel-remote cache server for Bazel action caching.
+# Uses the same MinIO backend as Attic when use_minio=true.
+
+variable "enable_bazel_cache" {
+  description = "Deploy bazel-remote cache server"
+  type        = bool
+  default     = false
+}
+
+variable "bazel_cache_bucket" {
+  description = "MinIO/S3 bucket name for Bazel cache"
+  type        = string
+  default     = "bazel-cache"
+}
+
+variable "bazel_cache_max_size_gb" {
+  description = "Maximum cache size in GB (for LRU eviction)"
+  type        = number
+  default     = 100
+}
+
+variable "bazel_cache_min_replicas" {
+  description = "Minimum number of bazel-cache replicas"
+  type        = number
+  default     = 1
+}
+
+variable "bazel_cache_max_replicas" {
+  description = "Maximum number of bazel-cache replicas"
+  type        = number
+  default     = 2
+}
+
+variable "bazel_cache_cpu_request" {
+  description = "CPU request for bazel-cache"
+  type        = string
+  default     = "100m"
+}
+
+variable "bazel_cache_memory_request" {
+  description = "Memory request for bazel-cache"
+  type        = string
+  default     = "256Mi"
+}
+
+variable "bazel_cache_cpu_limit" {
+  description = "CPU limit for bazel-cache"
+  type        = string
+  default     = "500m"
+}
+
+variable "bazel_cache_memory_limit" {
+  description = "Memory limit for bazel-cache"
+  type        = string
+  default     = "1Gi"
+}
+
+variable "bazel_cache_enable_ingress" {
+  description = "Enable external ingress for bazel-cache"
+  type        = bool
+  default     = false
+}
+
+variable "bazel_cache_ingress_host" {
+  description = "Hostname for bazel-cache external ingress"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
 # Token Management (DISABLED)
 # =============================================================================
 # Token management has been removed for Bates internal network deployment.

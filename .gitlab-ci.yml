@@ -67,6 +67,10 @@ variables:
   ATTIC_SERVER: "https://${FIXED_SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
   ATTIC_CACHE: "main"
 
+  # Bazel remote cache (cluster-internal, set when bazel-cache is deployed)
+  # Default endpoint assumes beehive deployment with attic-cache-dev namespace
+  BAZEL_REMOTE_CACHE: "grpc://bazel-cache.attic-cache-dev.svc.cluster.local:9092"
+
   # Disable unused AutoDevOps features
   TEST_DISABLED: "1"
   CODE_QUALITY_DISABLED: "1"
@@ -99,6 +103,8 @@ include:
   # Nix validation and build jobs
   - local: ".gitlab/ci/jobs/nix-check.gitlab-ci.yml"
   - local: ".gitlab/ci/jobs/nix-build.gitlab-ci.yml"
+  # Bazel validation and build jobs (with remote cache)
+  - local: ".gitlab/ci/jobs/bazel-build.gitlab-ci.yml"
 
 # ==============================================================================
 # Verify Stage - Health Checks

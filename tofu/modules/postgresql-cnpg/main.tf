@@ -68,7 +68,7 @@ locals {
 
   # Connection string format (without password - get from secret)
   # Password is stored in secret: ${var.name}-app
-  connection_host = "${var.name}-rw.${var.namespace}.svc.cluster.local"
+  connection_host    = "${var.name}-rw.${var.namespace}.svc.cluster.local"
   connection_ro_host = "${var.name}-ro.${var.namespace}.svc.cluster.local"
 }
 
@@ -147,11 +147,11 @@ locals {
           password_encryption = "scram-sha-256"
 
           # Audit logging
-          log_statement       = var.log_statement
-          log_connections     = "on"
-          log_disconnections  = "on"
-          log_lock_waits      = "on"
-          log_checkpoints     = "on"
+          log_statement      = var.log_statement
+          log_connections    = "on"
+          log_disconnections = "on"
+          log_lock_waits     = "on"
+          log_checkpoints    = "on"
 
           # Statement timeout (prevent long-running queries)
           statement_timeout = var.statement_timeout
@@ -317,7 +317,7 @@ resource "kubectl_manifest" "scheduled_backup" {
       labels    = local.labels
     }
     spec = {
-      schedule = var.backup_schedule
+      schedule             = var.backup_schedule
       backupOwnerReference = "cluster"
       cluster = {
         name = var.name

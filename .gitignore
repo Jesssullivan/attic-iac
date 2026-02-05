@@ -1,8 +1,10 @@
 # Ensure gitignore itself prevents accidental overrides
 !.gitignore
 
-# Bazel
+# Bazel (except our bazel-cache module and docs)
 bazel-*
+!tofu/modules/bazel-cache/
+!docs/research/bazel-*
 user.bazelrc
 
 # Nix

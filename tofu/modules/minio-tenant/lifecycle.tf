@@ -58,7 +58,7 @@ resource "kubernetes_config_map" "minio_lifecycle" {
           Filter = {
             And = {
               Prefix = ""
-              Tags = []
+              Tags   = []
             }
           }
           # Match .narinfo suffix via filter

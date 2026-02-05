@@ -43,8 +43,8 @@ module "nix_runner" {
   gitlab_url   = var.gitlab_url
   runner_token = var.nix_runner_token
 
-  runner_tags  = ["nix", "kubernetes"]
-  privileged   = false
+  runner_tags     = ["nix", "kubernetes"]
+  privileged      = false
   concurrent_jobs = var.nix_concurrent_jobs
 
   cpu_request    = var.nix_cpu_request

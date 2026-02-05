@@ -62,7 +62,7 @@ resource "kubectl_manifest" "minio_tenant" {
     }
     spec = {
       # Image configuration
-      image        = var.minio_image
+      image           = var.minio_image
       imagePullPolicy = "IfNotPresent"
 
       # Pool configuration
@@ -104,7 +104,7 @@ resource "kubectl_manifest" "minio_tenant" {
             fsGroup      = 1000
           }
         }
-      ] : [
+        ] : [
         # Standalone mode: 1 server × 1 drive
         # Suitable for development and testing
         {

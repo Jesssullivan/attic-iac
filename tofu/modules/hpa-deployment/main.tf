@@ -348,8 +348,8 @@ resource "kubernetes_ingress_v1" "main" {
 
     annotations = merge(
       {
-        "kubernetes.io/ingress.class"             = var.ingress_class
-        "cert-manager.io/cluster-issuer"          = var.cert_manager_issuer
+        "kubernetes.io/ingress.class"                 = var.ingress_class
+        "cert-manager.io/cluster-issuer"              = var.cert_manager_issuer
         "nginx.ingress.kubernetes.io/proxy-body-size" = var.ingress_proxy_body_size
       },
       var.ingress_annotations

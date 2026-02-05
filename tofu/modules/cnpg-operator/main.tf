@@ -90,7 +90,7 @@ resource "helm_release" "cnpg" {
 
       # Monitoring
       monitoring = {
-        podMonitorEnabled          = var.enable_pod_monitor
+        podMonitorEnabled = var.enable_pod_monitor
         grafanaDashboard = {
           create = var.enable_grafana_dashboard
         }

@@ -40,8 +40,8 @@ gc_memory_limit   = "128Mi"
 # =============================================================================
 
 use_cnpg_postgres     = true
-install_cnpg_operator = true  # Must install - no shared CNPG operator on beehive
-pg_instances          = 1 # Single instance for dev
+install_cnpg_operator = true # Must install - no shared CNPG operator on beehive
+pg_instances          = 1    # Single instance for dev
 pg_storage_size       = "5Gi"
 pg_storage_class      = "trident-delete" # Bates uses NetApp Trident CSI
 
@@ -97,8 +97,8 @@ use_minio                       = true
 install_minio_operator          = true  # Required - MinIO CRDs don't exist on beehive
 minio_operator_create_namespace = false # Namespace exists but operator/CRDs don't
 minio_distributed_mode          = false # Single server for dev
-minio_volume_size      = "10Gi"
-minio_storage_class    = "trident-delete"
+minio_volume_size               = "10Gi"
+minio_storage_class             = "trident-delete"
 
 # Minimal resources for development
 minio_cpu_request    = "100m"
@@ -109,6 +109,28 @@ minio_memory_limit   = "512Mi"
 minio_bucket_name          = "attic"
 minio_nar_retention_days   = 30 # Shorter retention for dev
 minio_chunk_retention_days = 30
+
+# =============================================================================
+# Bazel Remote Cache (Development)
+# =============================================================================
+# bazel-remote cache server for Bazel action caching.
+# Uses MinIO for S3-compatible storage backend.
+
+enable_bazel_cache       = true
+bazel_cache_bucket       = "bazel-cache"
+bazel_cache_max_size_gb  = 50 # Smaller cache for dev
+bazel_cache_min_replicas = 1  # Single replica for dev
+bazel_cache_max_replicas = 2
+
+# Minimal resources for development
+bazel_cache_cpu_request    = "100m"
+bazel_cache_memory_request = "256Mi"
+bazel_cache_cpu_limit      = "500m"
+bazel_cache_memory_limit   = "512Mi"
+
+# External ingress for development testing
+bazel_cache_enable_ingress = true
+bazel_cache_ingress_host   = "bazel-cache.beehive.bates.edu"
 
 # Cache warming disabled for dev
 enable_cache_warming = false

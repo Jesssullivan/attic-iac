@@ -230,7 +230,7 @@ module "minio_tenant" {
   volume_size        = var.minio_volume_size
   credentials_secret = kubernetes_secret.minio_credentials[0].metadata[0].name
 
-  # Bucket configuration - includes pg-backup bucket when backups enabled
+  # Bucket configuration - includes pg-backup and bazel-cache buckets when enabled
   buckets = concat(
     [
       {
@@ -240,6 +240,11 @@ module "minio_tenant" {
     var.pg_enable_backup ? [
       {
         name = "pg-backup"
+      }
+    ] : [],
+    var.enable_bazel_cache ? [
+      {
+        name = var.bazel_cache_bucket
       }
     ] : []
   )
@@ -838,6 +843,26 @@ output "minio_storage_total" {
   value       = var.use_minio ? module.minio_tenant[0].storage_total : "N/A"
 }
 
+output "bazel_cache_enabled" {
+  description = "Whether Bazel cache is enabled"
+  value       = var.enable_bazel_cache && var.use_minio
+}
+
+output "bazel_cache_grpc_endpoint" {
+  description = "Bazel cache gRPC endpoint (cluster-internal)"
+  value       = var.enable_bazel_cache && var.use_minio ? module.bazel_cache[0].grpc_endpoint : null
+}
+
+output "bazel_cache_http_endpoint" {
+  description = "Bazel cache HTTP endpoint (status/metrics)"
+  value       = var.enable_bazel_cache && var.use_minio ? module.bazel_cache[0].http_endpoint : null
+}
+
+output "bazel_cache_bazelrc_config" {
+  description = "Configuration lines for .bazelrc (CI-internal use)"
+  value       = var.enable_bazel_cache && var.use_minio ? module.bazel_cache[0].bazelrc_config : null
+}
+
 # =============================================================================
 # Cache Warming CronJob (Optional)
 # =============================================================================
@@ -934,6 +959,81 @@ resource "kubernetes_cron_job_v1" "cache_warm" {
       }
     }
   }
+}
+
+# =============================================================================
+# Bazel Remote Cache
+# =============================================================================
+# Optional bazel-remote cache server for Bazel action caching.
+# Uses the same MinIO backend as Attic for storage.
+
+# S3 credentials secret for bazel-cache (reuses MinIO credentials)
+resource "kubernetes_secret_v1" "bazel_cache_s3" {
+  count = var.enable_bazel_cache && var.use_minio ? 1 : 0
+
+  metadata {
+    name      = "bazel-cache-s3-credentials"
+    namespace = local.namespace_name
+    labels = {
+      "app.kubernetes.io/name"       = "bazel-cache"
+      "app.kubernetes.io/component"  = "storage-credentials"
+      "app.kubernetes.io/managed-by" = "opentofu"
+    }
+  }
+
+  data = {
+    "access-key" = local.effective_s3_access_key
+    "secret-key" = local.effective_s3_secret_key
+  }
+
+  depends_on = [
+    kubernetes_namespace.nix_cache,
+    kubernetes_secret.minio_credentials
+  ]
+}
+
+# Bazel remote cache module
+module "bazel_cache" {
+  count  = var.enable_bazel_cache && var.use_minio ? 1 : 0
+  source = "../../modules/bazel-cache"
+
+  name      = "bazel-cache"
+  namespace = local.namespace_name
+
+  # MinIO S3 backend
+  s3_endpoint    = local.effective_s3_endpoint
+  s3_bucket      = var.bazel_cache_bucket
+  s3_secret      = kubernetes_secret_v1.bazel_cache_s3[0].metadata[0].name
+  s3_disable_ssl = true
+
+  # Cache configuration
+  max_cache_size_gb = var.bazel_cache_max_size_gb
+
+  # Scaling
+  min_replicas = var.bazel_cache_min_replicas
+  max_replicas = var.bazel_cache_max_replicas
+
+  # Resources
+  cpu_request    = var.bazel_cache_cpu_request
+  memory_request = var.bazel_cache_memory_request
+  cpu_limit      = var.bazel_cache_cpu_limit
+  memory_limit   = var.bazel_cache_memory_limit
+
+  # Ingress (optional)
+  enable_ingress = var.bazel_cache_enable_ingress
+  ingress_host   = var.bazel_cache_ingress_host != "" ? var.bazel_cache_ingress_host : "bazel-cache.${var.ingress_domain}"
+
+  # Monitoring
+  enable_metrics         = var.enable_prometheus_monitoring
+  create_service_monitor = var.enable_prometheus_monitoring
+
+  # Don't wait for rollout to avoid blocking
+  wait_for_rollout = false
+
+  depends_on = [
+    module.minio_tenant,
+    kubernetes_secret_v1.bazel_cache_s3
+  ]
 }
 
 # =============================================================================

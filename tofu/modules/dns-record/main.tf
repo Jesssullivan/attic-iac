@@ -65,10 +65,10 @@ resource "terraform_data" "dreamhost_dns" {
   for_each = var.provider_type == "dreamhost" ? { for r in local.dreamhost_records : r.name => r } : {}
 
   input = {
-    record_name      = each.value.fqdn
-    record_type      = each.value.type
-    record_value     = each.value.value
-    comment          = var.dreamhost_comment
+    record_name       = each.value.fqdn
+    record_type       = each.value.type
+    record_value      = each.value.value
+    comment           = var.dreamhost_comment
     dreamhost_api_key = var.dreamhost_api_key
   }
 
@@ -135,12 +135,12 @@ output "records" {
 
 output "fqdns" {
   description = "List of fully qualified domain names"
-  value = [for r in local.records_list : r.fqdn]
+  value       = [for r in local.records_list : r.fqdn]
 }
 
 output "external_dns_annotations" {
   description = "Annotations for external-dns integration"
-  value = local.external_dns_annotations
+  value       = local.external_dns_annotations
 }
 
 output "dreamhost_records" {

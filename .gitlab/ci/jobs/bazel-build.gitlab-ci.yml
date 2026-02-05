@@ -16,6 +16,8 @@
   variables:
     # Enable flakes
     NIX_CONFIG: "experimental-features = nix-command flakes"
+    # Remote cache endpoint (set in CI/CD variables when bazel-cache is deployed)
+    # BAZEL_REMOTE_CACHE: "grpc://bazel-cache.attic-cache-dev.svc.cluster.local:9092"
   cache:
     key: bazel-${CI_COMMIT_REF_SLUG}
     paths:
@@ -28,8 +30,22 @@
     - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     # Bazel is provided by the Nix devShell
     - nix develop --command bazel version
-    # Use CI configuration
-    - echo "build --config=ci" >> user.bazelrc
+    # Configure Bazel for CI
+    - |
+      if [ -n "${BAZEL_REMOTE_CACHE:-}" ]; then
+        echo "Configuring remote cache: ${BAZEL_REMOTE_CACHE}"
+        cat >> user.bazelrc << EOF
+      build --config=ci
+      build --remote_cache=${BAZEL_REMOTE_CACHE}
+      build --remote_upload_local_results=true
+      build --remote_download_minimal
+      build --experimental_remote_cache_async
+      build --remote_timeout=60
+      EOF
+      else
+        echo "Remote cache not configured, using local disk cache"
+        echo "build --config=ci" >> user.bazelrc
+      fi
 
 # =============================================================================
 # Validation Jobs
