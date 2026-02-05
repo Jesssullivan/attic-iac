@@ -457,7 +457,8 @@ resource "kubernetes_config_map" "attic_config" {
       # require-proof-of-possession = false
 
       [database]
-      # Uses DATABASE_URL environment variable
+      # PostgreSQL connection (CNPG-managed cluster)
+      url = "${var.use_cnpg_postgres ? module.attic_pg[0].database_url : var.database_url}"
 
       [storage]
       type = "s3"
