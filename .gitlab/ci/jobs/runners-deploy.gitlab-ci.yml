@@ -7,6 +7,18 @@
   variables:
     STACK_DIR: tofu/stacks/bates-ils-runners
 
+# Shared init script — parameterized by STATE_NAME
+.runners_init: &runners_init |
+  cd ${STACK_DIR}
+  tofu init -reconfigure \
+    -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}" \
+    -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
+    -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
+    -backend-config="lock_method=POST" \
+    -backend-config="unlock_method=DELETE" \
+    -backend-config="username=gitlab-ci-token" \
+    -backend-config="password=${CI_JOB_TOKEN}"
+
 # ---------------------------------------------------------------------------
 # Plan jobs - run on merge requests
 # ---------------------------------------------------------------------------
@@ -15,18 +27,10 @@ runners:plan:beehive:
   extends: .runners_deploy_base
   variables:
     STATE_NAME: bates-ils-runners-beehive
+    KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
   script:
-    - |
-      cd ${STACK_DIR}
-      tofu init -reconfigure \
-        -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}" \
-        -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="lock_method=POST" \
-        -backend-config="unlock_method=DELETE" \
-        -backend-config="username=gitlab-ci-token" \
-        -backend-config="password=${CI_JOB_TOKEN}"
-      tofu plan -var-file=beehive.tfvars -out=plan.tfplan
+    - *runners_init
+    - tofu plan -var-file=beehive.tfvars -var="gitlab_token=${GITLAB_RUNNER_TOKEN:-${CI_JOB_TOKEN}}" -out=plan.tfplan
   artifacts:
     paths:
       - ${STACK_DIR}/plan.tfplan
@@ -38,18 +42,10 @@ runners:plan:rigel:
   extends: .runners_deploy_base
   variables:
     STATE_NAME: bates-ils-runners-rigel
+    KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
   script:
-    - |
-      cd ${STACK_DIR}
-      tofu init -reconfigure \
-        -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}" \
-        -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="lock_method=POST" \
-        -backend-config="unlock_method=DELETE" \
-        -backend-config="username=gitlab-ci-token" \
-        -backend-config="password=${CI_JOB_TOKEN}"
-      tofu plan -var-file=rigel.tfvars -out=plan.tfplan
+    - *runners_init
+    - tofu plan -var-file=rigel.tfvars -var="gitlab_token=${GITLAB_RUNNER_TOKEN:-${CI_JOB_TOKEN}}" -out=plan.tfplan
   artifacts:
     paths:
       - ${STACK_DIR}/plan.tfplan
@@ -65,18 +61,10 @@ runners:apply:beehive:
   extends: .runners_deploy_base
   variables:
     STATE_NAME: bates-ils-runners-beehive
+    KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
   script:
-    - |
-      cd ${STACK_DIR}
-      tofu init -reconfigure \
-        -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}" \
-        -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="lock_method=POST" \
-        -backend-config="unlock_method=DELETE" \
-        -backend-config="username=gitlab-ci-token" \
-        -backend-config="password=${CI_JOB_TOKEN}"
-      tofu apply -var-file=beehive.tfvars -auto-approve
+    - *runners_init
+    - tofu apply -var-file=beehive.tfvars -var="gitlab_token=${GITLAB_RUNNER_TOKEN:-${CI_JOB_TOKEN}}" -auto-approve
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       when: manual
@@ -87,18 +75,10 @@ runners:apply:rigel:
   extends: .runners_deploy_base
   variables:
     STATE_NAME: bates-ils-runners-rigel
+    KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:rigel"
   script:
-    - |
-      cd ${STACK_DIR}
-      tofu init -reconfigure \
-        -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}" \
-        -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${STATE_NAME}/lock" \
-        -backend-config="lock_method=POST" \
-        -backend-config="unlock_method=DELETE" \
-        -backend-config="username=gitlab-ci-token" \
-        -backend-config="password=${CI_JOB_TOKEN}"
-      tofu apply -var-file=rigel.tfvars -auto-approve
+    - *runners_init
+    - tofu apply -var-file=rigel.tfvars -var="gitlab_token=${GITLAB_RUNNER_TOKEN:-${CI_JOB_TOKEN}}" -auto-approve
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       when: manual

@@ -546,7 +546,7 @@ module "attic_api" {
   container_port = 8080
   container_args = [
     "--config", "/etc/attic/server.toml",
-    "--mode", "api-server"
+    "--mode", "monolithic"
   ]
 
   # Environment from secrets
