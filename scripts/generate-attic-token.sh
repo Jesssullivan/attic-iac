@@ -69,36 +69,36 @@ EOF
 SECRET_B64=""
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -s | --sub)
-      SUB="$2"
-      shift 2
-      ;;
-    -d | --days)
-      DAYS="$2"
-      shift 2
-      ;;
-    -c | --cache)
-      CACHE="$2"
-      shift 2
-      ;;
-    --admin)
-      ADMIN=true
-      shift
-      ;;
-    -h | --help) usage ;;
-    -*)
-      echo "Unknown option: $1" >&2
+  -s | --sub)
+    SUB="$2"
+    shift 2
+    ;;
+  -d | --days)
+    DAYS="$2"
+    shift 2
+    ;;
+  -c | --cache)
+    CACHE="$2"
+    shift 2
+    ;;
+  --admin)
+    ADMIN=true
+    shift
+    ;;
+  -h | --help) usage ;;
+  -*)
+    echo "Unknown option: $1" >&2
+    usage
+    ;;
+  *)
+    if [[ -z $SECRET_B64 ]]; then
+      SECRET_B64="$1"
+    else
+      echo "Unexpected argument: $1" >&2
       usage
-      ;;
-    *)
-      if [[ -z $SECRET_B64 ]]; then
-        SECRET_B64="$1"
-      else
-        echo "Unexpected argument: $1" >&2
-        usage
-      fi
-      shift
-      ;;
+    fi
+    shift
+    ;;
   esac
 done
 
