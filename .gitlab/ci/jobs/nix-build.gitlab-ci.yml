@@ -19,6 +19,21 @@
     - curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm --init none
     - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     - nix --version
+    # Dogfood: use our Attic cache as a substituter (pull cached builds)
+    # Adds both stable and review URLs — nix silently skips unreachable ones
+    - |
+      CACHE_NAME="${ATTIC_CACHE:-main}"
+      if [ -n "${ATTIC_SERVER:-}" ]; then
+        echo "Configuring Attic substituter: ${ATTIC_SERVER}/${CACHE_NAME}"
+        echo "extra-substituters = ${ATTIC_SERVER}/${CACHE_NAME}" >> /etc/nix/nix.conf
+        echo "trusted-substituters = ${ATTIC_SERVER}/${CACHE_NAME}" >> /etc/nix/nix.conf
+      fi
+      if [ -n "${CI_COMMIT_REF_SLUG:-}" ]; then
+        REVIEW_URL="https://${FIXED_SUBDOMAIN:-attic-cache}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN:-beehive.bates.edu}/${CACHE_NAME}"
+        echo "Also trying review cache: ${REVIEW_URL}"
+        echo "extra-substituters = ${REVIEW_URL}" >> /etc/nix/nix.conf
+        echo "trusted-substituters = ${REVIEW_URL}" >> /etc/nix/nix.conf
+      fi
   artifacts:
     paths:
       - result*
@@ -34,17 +49,26 @@ nix:build-client:
     - echo "Building Attic client..."
     - nix build .#attic-client --print-build-logs --out-link result-client
     - |
-      # Push to cache if configured (use nix run since attic isn't in PATH)
-      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
-      # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_SERVER:-}" ]; then
-        ATTIC_CACHE="${ATTIC_CACHE:-main}"
-        echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
-        echo "Pushing to Attic cache: $ATTIC_CACHE"
-        nix run .#attic -- push "$ATTIC_CACHE" result-client || echo "WARNING: Cache push failed (non-blocking)"
+      # Push to Attic cache (auth-free, best-effort)
+      # Try review URL first (MR pipelines), fall back to stable URL
+      PUSH_SERVER=""
+      if [ -n "${CI_COMMIT_REF_SLUG:-}" ]; then
+        REVIEW_SERVER="https://${FIXED_SUBDOMAIN:-attic-cache}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN:-beehive.bates.edu}"
+        if curl -sSf "${REVIEW_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${REVIEW_SERVER}"
+        fi
+      fi
+      if [ -z "$PUSH_SERVER" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+        if curl -sSf "${ATTIC_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${ATTIC_SERVER}"
+        fi
+      fi
+      if [ -n "$PUSH_SERVER" ]; then
+        echo "Pushing to Attic: ${PUSH_SERVER}"
+        nix run .#attic -- login --set-default ci "$PUSH_SERVER" || true
+        nix run .#attic -- push "${ATTIC_CACHE:-main}" result-client || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: ATTIC_SERVER not configured"
+        echo "SKIP: No reachable Attic server"
       fi
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -71,17 +95,25 @@ nix:build-container:
         cat result-container | head -20
       fi
     - |
-      # Push derivation to cache if configured (use nix run since attic isn't in PATH)
-      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
-      # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_SERVER:-}" ]; then
-        ATTIC_CACHE="${ATTIC_CACHE:-main}"
-        echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
-        echo "Pushing container derivation to Attic cache"
-        nix run .#attic -- push "$ATTIC_CACHE" result-container || echo "WARNING: Cache push failed (non-blocking)"
+      # Push to Attic cache (auth-free, best-effort)
+      PUSH_SERVER=""
+      if [ -n "${CI_COMMIT_REF_SLUG:-}" ]; then
+        REVIEW_SERVER="https://${FIXED_SUBDOMAIN:-attic-cache}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN:-beehive.bates.edu}"
+        if curl -sSf "${REVIEW_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${REVIEW_SERVER}"
+        fi
+      fi
+      if [ -z "$PUSH_SERVER" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+        if curl -sSf "${ATTIC_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${ATTIC_SERVER}"
+        fi
+      fi
+      if [ -n "$PUSH_SERVER" ]; then
+        echo "Pushing to Attic: ${PUSH_SERVER}"
+        nix run .#attic -- login --set-default ci "$PUSH_SERVER" || true
+        nix run .#attic -- push "${ATTIC_CACHE:-main}" result-container || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: ATTIC_SERVER not configured"
+        echo "SKIP: No reachable Attic server"
       fi
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -159,17 +191,25 @@ nix:build-all:
       echo "Build summary:"
       ls -la result-*
     - |
-      # Push all to cache (use nix run since attic isn't in PATH)
-      # Requires CI variable: ATTIC_SERVER (URL) - auth-free mode, no token needed
-      # Push is best-effort - don't fail the build if push fails
-      if [ -n "${ATTIC_SERVER:-}" ]; then
-        ATTIC_CACHE="${ATTIC_CACHE:-main}"
-        echo "Configuring Attic server: $ATTIC_SERVER"
-        nix run .#attic -- login --set-default ci "$ATTIC_SERVER" || echo "WARNING: Login failed (non-blocking)"
-        echo "Pushing all outputs to Attic cache"
-        nix run .#attic -- push "$ATTIC_CACHE" result-* || echo "WARNING: Cache push failed (non-blocking)"
+      # Push to Attic cache (auth-free, best-effort)
+      PUSH_SERVER=""
+      if [ -n "${CI_COMMIT_REF_SLUG:-}" ]; then
+        REVIEW_SERVER="https://${FIXED_SUBDOMAIN:-attic-cache}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN:-beehive.bates.edu}"
+        if curl -sSf "${REVIEW_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${REVIEW_SERVER}"
+        fi
+      fi
+      if [ -z "$PUSH_SERVER" ] && [ -n "${ATTIC_SERVER:-}" ]; then
+        if curl -sSf "${ATTIC_SERVER}/" --connect-timeout 5 --max-time 10 >/dev/null 2>&1; then
+          PUSH_SERVER="${ATTIC_SERVER}"
+        fi
+      fi
+      if [ -n "$PUSH_SERVER" ]; then
+        echo "Pushing to Attic: ${PUSH_SERVER}"
+        nix run .#attic -- login --set-default ci "$PUSH_SERVER" || true
+        nix run .#attic -- push "${ATTIC_CACHE:-main}" result-* || echo "WARNING: Cache push failed (non-blocking)"
       else
-        echo "SKIP: ATTIC_SERVER not configured"
+        echo "SKIP: No reachable Attic server"
       fi
   rules:
     - if: $CI_COMMIT_TAG

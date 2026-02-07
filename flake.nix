@@ -381,14 +381,15 @@
       };
     };
 
-  # Dogfooding: use our own cache once deployed
-  # Uncomment after initial deployment and key generation
+  # Dogfooding: use our own Attic cache on beehive (auth-free, internal)
+  # Users must add the URL to trusted-substituters in their nix.conf:
+  #   trusted-substituters = https://attic-cache.beehive.bates.edu/main
   nixConfig = {
     extra-substituters = [
-      # "https://nix-cache.fuzzy-dev.tinyland.dev/main"
+      "https://attic-cache.beehive.bates.edu/main"
     ];
     extra-trusted-public-keys = [
-      # "main:<public-key-to-be-generated>"
+      # No signing key configured — trust via trusted-substituters instead
     ];
   };
 }

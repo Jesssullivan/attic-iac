@@ -18,9 +18,24 @@
     - curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm --init none
     - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     - nix --version
+    # Dogfood: use our Attic cache as a substituter (pull cached builds)
+    # Adds both stable and review URLs — nix silently skips unreachable ones
+    - |
+      CACHE_NAME="${ATTIC_CACHE:-main}"
+      if [ -n "${ATTIC_SERVER:-}" ]; then
+        echo "Configuring Attic substituter: ${ATTIC_SERVER}/${CACHE_NAME}"
+        echo "extra-substituters = ${ATTIC_SERVER}/${CACHE_NAME}" >> /etc/nix/nix.conf
+        echo "trusted-substituters = ${ATTIC_SERVER}/${CACHE_NAME}" >> /etc/nix/nix.conf
+      fi
+      if [ -n "${CI_COMMIT_REF_SLUG:-}" ]; then
+        REVIEW_URL="https://${FIXED_SUBDOMAIN:-attic-cache}-${CI_COMMIT_REF_SLUG}.${KUBE_INGRESS_BASE_DOMAIN:-beehive.bates.edu}/${CACHE_NAME}"
+        echo "Also trying review cache: ${REVIEW_URL}"
+        echo "extra-substituters = ${REVIEW_URL}" >> /etc/nix/nix.conf
+        echo "trusted-substituters = ${REVIEW_URL}" >> /etc/nix/nix.conf
+      fi
 
 # Validate flake configuration
-# NOTE: allow_failure until Attic cache is deployed - builds take 60+ min uncached
+# NOTE: allow_failure - first build populates Attic cache, subsequent builds are fast
 nix:flake-check:
   extends: .nix-check-base
   script:
