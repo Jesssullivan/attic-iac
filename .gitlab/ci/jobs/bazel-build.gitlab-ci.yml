@@ -4,33 +4,28 @@
 # These jobs validate Bazel builds work alongside Nix.
 # Bazel is used for validation and artifact bundling, while Nix
 # handles all binary and container builds.
-# Uses Alpine with Nix installed via DeterminateSystems installer since
-# nixos/nix images lack /bin/sh required by GitLab Runner.
+#
+# Uses Debian (glibc) because Bazelisk downloads a glibc-linked Bazel
+# binary at runtime. Alpine (musl) causes "no such file or directory".
 
 .bazel-base:
   stage: build
-  image: alpine:3.21
+  image: debian:bookworm-slim
   tags:
     - nix
   interruptible: true
   variables:
-    # Enable flakes
     NIX_CONFIG: "experimental-features = nix-command flakes"
-    # Remote cache endpoint (set in CI/CD variables when bazel-cache is deployed)
-    # BAZEL_REMOTE_CACHE: "grpc://bazel-cache.attic-cache-dev.svc.cluster.local:9092"
   cache:
     key: bazel-${CI_COMMIT_REF_SLUG}
     paths:
       - ~/.cache/bazel/
   before_script:
-    - apk add --no-cache curl xz bash git
-    # Fix /nix permissions (runner mounts emptyDir which is world-writable)
+    - apt-get update -qq && apt-get install -y -qq curl xz-utils git ca-certificates > /dev/null
     - chmod 755 /nix 2>/dev/null || true
     - curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm --init none
     - . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    # Bazel is provided by the Nix devShell
     - nix develop .#ci --command bazel version
-    # Configure Bazel for CI
     - |
       if [ -n "${BAZEL_REMOTE_CACHE:-}" ]; then
         echo "Configuring remote cache: ${BAZEL_REMOTE_CACHE}"

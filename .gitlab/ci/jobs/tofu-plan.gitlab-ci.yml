@@ -162,7 +162,7 @@ tofu:plan:review:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   variables:
-    TF_STATE_NAME: "attic-review-${CI_COMMIT_REF_SLUG}"
+    TF_STATE_NAME: "attic-review"
     TF_ENVIRONMENT: "review"
     TF_VAR_namespace: "attic-cache-review"
     TF_VAR_environment: "development"

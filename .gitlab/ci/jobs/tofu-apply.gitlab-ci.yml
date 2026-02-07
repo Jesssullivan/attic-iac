@@ -93,6 +93,39 @@
         VAR_FLAGS+=(-var="database_url=${ATTIC_DATABASE_URL}")
       fi
 
+      # Import pre-existing cluster resources if state is empty
+      RESOURCE_COUNT=$(tofu state list 2>/dev/null | wc -l || echo "0")
+      if [ "$RESOURCE_COUNT" -eq 0 ]; then
+        echo ""
+        echo "Empty state detected — importing pre-existing resources..."
+        NS="${TF_VAR_namespace:-attic-cache}"
+        # Import namespace if it exists in cluster
+        if kubectl get namespace "$NS" >/dev/null 2>&1; then
+          echo "  Importing namespace $NS"
+          tofu import "${VAR_FLAGS[@]}" 'kubernetes_namespace.nix_cache[0]' "$NS" || true
+        fi
+        # Import shared operator namespaces
+        if kubectl get namespace cnpg-system >/dev/null 2>&1; then
+          echo "  Importing cnpg-system namespace"
+          tofu import "${VAR_FLAGS[@]}" 'module.cnpg_operator[0].kubernetes_namespace.cnpg_system[0]' cnpg-system || true
+        fi
+        if kubectl get namespace minio-operator >/dev/null 2>&1; then
+          echo "  Importing minio-operator namespace"
+          tofu import "${VAR_FLAGS[@]}" 'module.minio_operator[0].kubernetes_namespace.minio_operator[0]' minio-operator || true
+        fi
+        # Import helm releases via secret labels (helm stores state as k8s secrets)
+        if kubectl get secret -n minio-operator -l owner=helm,name=minio-operator >/dev/null 2>&1; then
+          echo "  Importing minio-operator helm release"
+          tofu import "${VAR_FLAGS[@]}" 'module.minio_operator[0].helm_release.minio_operator[0]' minio-operator/minio-operator || true
+        fi
+        CNPG_SECRET=$(kubectl get secret -n cnpg-system -l owner=helm -o jsonpath='{.items[0].metadata.labels.name}' 2>/dev/null || true)
+        if [ -n "$CNPG_SECRET" ]; then
+          echo "  Importing CNPG helm release: $CNPG_SECRET"
+          tofu import "${VAR_FLAGS[@]}" 'module.cnpg_operator[0].helm_release.cnpg[0]' "cnpg-system/$CNPG_SECRET" || true
+        fi
+        echo "  Import phase complete"
+      fi
+
       # Refresh state to sync any external changes or imports
       echo ""
       echo "Refreshing state from remote backend..."
@@ -168,7 +201,9 @@ tofu:apply:review:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   variables:
-    TF_STATE_NAME: "attic-review-${CI_COMMIT_REF_SLUG}"
+    # Single shared state — all MR branches deploy to the same review namespace
+    # and shared cluster resources (cnpg-system, minio-operator)
+    TF_STATE_NAME: "attic-review"
     TF_ENVIRONMENT: "review"
     TF_VAR_namespace: "attic-cache-review"
     TF_VAR_environment: "development"
@@ -371,7 +406,7 @@ tofu:rollback:review:
       when: manual
       allow_failure: true
   variables:
-    TF_STATE_NAME: "attic-review-${CI_COMMIT_REF_SLUG}"
+    TF_STATE_NAME: "attic-review"
     ROLLBACK_NAMESPACE: "attic-cache-review"
     ROLLBACK_DEPLOYMENT: "attic"
     KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
@@ -392,7 +427,7 @@ tofu:destroy:review:
       when: manual
       allow_failure: true
   variables:
-    TF_STATE_NAME: "attic-review-${CI_COMMIT_REF_SLUG}"
+    TF_STATE_NAME: "attic-review"
     KUBE_CONTEXT: "bates-ils/projects/kubernetes/gitlab-agents:beehive"
   script:
     - |
