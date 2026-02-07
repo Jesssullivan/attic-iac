@@ -145,6 +145,10 @@ locals {
         namespace = "${var.namespace}"
         image = "${local.default_image}"
         privileged = ${local.privileged}
+        %{if var.namespace_per_job~}
+        namespace_per_job = true
+        namespace_per_job_prefix = "${var.namespace_per_job_prefix}"
+        %{endif~}
         %{if local.dind_enabled~}
         # DinD service configuration
         [[runners.kubernetes.services]]

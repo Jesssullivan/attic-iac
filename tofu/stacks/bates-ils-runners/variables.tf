@@ -554,6 +554,38 @@ variable "nix_hpa_max_replicas" {
 }
 
 # =============================================================================
+# Namespace Per Job (Untrusted Isolation)
+# =============================================================================
+
+variable "namespace_per_job_enabled" {
+  description = "Enable namespace-per-job isolation (creates ci-job-* namespaces)"
+  type        = bool
+  default     = false
+}
+
+# =============================================================================
+# Resource Quotas
+# =============================================================================
+
+variable "quota_cpu_requests" {
+  description = "Total CPU requests quota for runner namespace"
+  type        = string
+  default     = "16"
+}
+
+variable "quota_memory_requests" {
+  description = "Total memory requests quota for runner namespace"
+  type        = string
+  default     = "32Gi"
+}
+
+variable "quota_max_pods" {
+  description = "Maximum number of pods in runner namespace"
+  type        = string
+  default     = "50"
+}
+
+# =============================================================================
 # Pod Disruption Budget
 # =============================================================================
 

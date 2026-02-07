@@ -347,6 +347,22 @@ variable "pod_annotations" {
 }
 
 # =============================================================================
+# Namespace Per Job (Untrusted Isolation)
+# =============================================================================
+
+variable "namespace_per_job" {
+  description = "Create a unique namespace per CI job for isolation"
+  type        = bool
+  default     = false
+}
+
+variable "namespace_per_job_prefix" {
+  description = "Prefix for per-job namespaces"
+  type        = string
+  default     = "ci-job-"
+}
+
+# =============================================================================
 # Cleanup Configuration
 # =============================================================================
 

@@ -128,6 +128,21 @@ module "agent_rbac" {
 }
 
 # =============================================================================
+# Runner Security Policies (NetworkPolicy, ResourceQuota, LimitRange)
+# =============================================================================
+
+module "runner_security" {
+  source = "../../modules/runner-security"
+
+  namespace             = var.namespace
+  quota_cpu_requests    = var.quota_cpu_requests
+  quota_memory_requests = var.quota_memory_requests
+  quota_max_pods        = var.quota_max_pods
+
+  depends_on = [kubernetes_namespace_v1.runners]
+}
+
+# =============================================================================
 # Docker Runner - Standard builds
 # =============================================================================
 
@@ -149,6 +164,9 @@ module "docker_runner" {
   concurrent_jobs = var.docker_concurrent_jobs
   run_untagged    = false
   protected       = false
+
+  # Namespace-per-job isolation
+  namespace_per_job = var.namespace_per_job_enabled
 
   # Manager pod resources
   cpu_request    = var.docker_cpu_request
@@ -265,6 +283,9 @@ module "rocky8_runner" {
   run_untagged    = false
   protected       = false
 
+  # Namespace-per-job isolation
+  namespace_per_job = var.namespace_per_job_enabled
+
   # Manager pod resources
   cpu_request    = var.rocky_cpu_request
   memory_request = var.rocky_memory_request
@@ -319,6 +340,9 @@ module "rocky9_runner" {
   run_untagged    = false
   protected       = false
 
+  # Namespace-per-job isolation
+  namespace_per_job = var.namespace_per_job_enabled
+
   # Manager pod resources
   cpu_request    = var.rocky_cpu_request
   memory_request = var.rocky_memory_request
@@ -372,6 +396,9 @@ module "nix_runner" {
   concurrent_jobs = var.nix_concurrent_jobs
   run_untagged    = false
   protected       = false
+
+  # Namespace-per-job isolation
+  namespace_per_job = var.namespace_per_job_enabled
 
   # Attic cache integration
   attic_server = var.attic_server

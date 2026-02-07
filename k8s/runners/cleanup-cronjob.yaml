@@ -109,6 +109,23 @@ spec:
                   fi
 
                   echo ""
+
+                  # Clean orphaned ci-job-* namespaces (from namespace_per_job)
+                  echo "Cleaning orphaned ci-job-* namespaces older than 2 hours..."
+                  for ns in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep '^ci-job-'); do
+                    CREATED=$(kubectl get namespace ${ns} \
+                      -o jsonpath='{.metadata.creationTimestamp}' 2>/dev/null || echo "")
+                    if [ -n "${CREATED}" ]; then
+                      AGE_SECONDS=$(( $(date +%s) - $(date -d "${CREATED}" +%s 2>/dev/null || echo 0) ))
+                      PODS=$(kubectl get pods -n ${ns} --field-selector=status.phase==Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+                      if [ ${AGE_SECONDS} -gt 7200 ] && [ -z "${PODS}" ]; then
+                        echo "  Deleting orphaned namespace: ${ns} (age: ${AGE_SECONDS}s)"
+                        kubectl delete namespace ${ns} --ignore-not-found || true
+                      fi
+                    fi
+                  done
+
+                  echo ""
                   echo "=== Cleanup complete ==="
 
 ---
@@ -123,7 +140,7 @@ metadata:
     app.kubernetes.io/component: cleanup
 
 ---
-# Role for pod management
+# Role for pod management in runner namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -138,7 +155,7 @@ rules:
     verbs: ["get", "list", "delete"]
 
 ---
-# RoleBinding
+# RoleBinding for namespace-scoped pod cleanup
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -154,4 +171,39 @@ subjects:
 roleRef:
   kind: Role
   name: runner-cleanup
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole for orphaned ci-job-* namespace cleanup
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runner-cleanup-namespaces
+  labels:
+    app.kubernetes.io/name: runner-cleanup
+    app.kubernetes.io/component: cleanup
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for namespace cleanup
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runner-cleanup-namespaces
+  labels:
+    app.kubernetes.io/name: runner-cleanup
+    app.kubernetes.io/component: cleanup
+subjects:
+  - kind: ServiceAccount
+    name: runner-cleanup
+    namespace: bates-ils-runners
+roleRef:
+  kind: ClusterRole
+  name: runner-cleanup-namespaces
   apiGroup: rbac.authorization.k8s.io

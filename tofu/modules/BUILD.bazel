@@ -64,6 +64,14 @@ tofu_module(
 )
 
 tofu_module(
+    name = "runner_security",
+    srcs = glob(["runner-security/*.tf"]),
+    providers = [
+        "kubernetes",
+    ],
+)
+
+tofu_module(
     name = "hpa_deployment",
     srcs = glob(["hpa-deployment/*.tf"]),
     providers = ["kubernetes"],
@@ -143,6 +151,16 @@ tofu_validate(
 tofu_validate(
     name = "gitlab_user_runner_validate",
     module = ":gitlab_user_runner",
+    tags = [
+        "external",
+        "tofu",
+        "validation",
+    ],
+)
+
+tofu_validate(
+    name = "runner_security_validate",
+    module = ":runner_security",
     tags = [
         "external",
         "tofu",
@@ -250,6 +268,15 @@ tofu_fmt_test(
 )
 
 tofu_fmt_test(
+    name = "runner_security_fmt_test",
+    module = ":runner_security",
+    tags = [
+        "formatting",
+        "tofu",
+    ],
+)
+
+tofu_fmt_test(
     name = "gitlab_agent_rbac_fmt_test",
     module = ":gitlab_agent_rbac",
     tags = [
@@ -312,6 +339,7 @@ filegroup(
         ":minio_operator",
         ":minio_tenant",
         ":postgresql_cnpg",
+        ":runner_security",
     ],
 )
 
@@ -333,6 +361,7 @@ filegroup(
         ":gitlab_runner",
         ":gitlab_user_runner",
         ":hpa_deployment",
+        ":runner_security",
     ],
 )
 
@@ -363,6 +392,7 @@ test_suite(
         ":minio_operator_validate",
         ":minio_tenant_validate",
         ":postgresql_cnpg_validate",
+        ":runner_security_validate",
     ],
 )
 
@@ -381,5 +411,6 @@ test_suite(
         ":minio_operator_fmt_test",
         ":minio_tenant_fmt_test",
         ":postgresql_cnpg_fmt_test",
+        ":runner_security_fmt_test",
     ],
 )

@@ -70,7 +70,7 @@ resource "helm_release" "gitlab_runner" {
 
   set {
     name  = "rbac.clusterWideAccess"
-    value = tostring(var.cluster_wide_access)
+    value = tostring(var.cluster_wide_access || var.namespace_per_job)
   }
 
   # Runner configuration
