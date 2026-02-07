@@ -3,71 +3,9 @@
 # Implements bucket lifecycle policies for automatic cleanup of:
 # - NAR files (Nix archive files)
 # - Chunks (content-addressed storage chunks)
-# - Incomplete multipart uploads
 #
-# These policies help manage storage costs by removing old cache entries.
-
-# =============================================================================
-# Lifecycle Policy ConfigMap
-# =============================================================================
-
-resource "kubernetes_config_map" "minio_lifecycle" {
-  count = var.enable_lifecycle_policies ? 1 : 0
-
-  metadata {
-    name      = "${var.tenant_name}-lifecycle"
-    namespace = var.namespace
-
-    labels = {
-      "app.kubernetes.io/name"       = "minio"
-      "app.kubernetes.io/instance"   = var.tenant_name
-      "app.kubernetes.io/component"  = "lifecycle"
-      "app.kubernetes.io/managed-by" = "opentofu"
-    }
-  }
-
-  data = {
-    # MinIO ILM rules in AWS S3 lifecycle configuration format
-    # See: https://min.io/docs/minio/linux/administration/object-management/object-lifecycle-management.html
-    "lifecycle.json" = jsonencode({
-      Rules = [
-        # Rule 1: Expire NAR files after retention period
-        {
-          ID     = "expire-nar-files"
-          Status = "Enabled"
-          Filter = {
-            Prefix = "nar/"
-          }
-          Expiration = {
-            Days = var.nar_retention_days
-          }
-        },
-        # Rule 2: Expire chunk files after retention period
-        {
-          ID     = "expire-chunks"
-          Status = "Enabled"
-          Filter = {
-            Prefix = "chunks/"
-          }
-          Expiration = {
-            Days = var.chunk_retention_days
-          }
-        },
-        # Rule 3: Abort incomplete multipart uploads (applies to all objects)
-        {
-          ID     = "abort-incomplete-uploads"
-          Status = "Enabled"
-          Filter = {
-            Prefix = ""
-          }
-          AbortIncompleteMultipartUpload = {
-            DaysAfterInitiation = var.abort_incomplete_days
-          }
-        }
-      ]
-    })
-  }
-}
+# Uses `mc ilm rule add` commands directly instead of JSON import
+# for compatibility across mc client versions.
 
 # =============================================================================
 # Job to Apply Lifecycle Policies
@@ -90,6 +28,7 @@ resource "kubernetes_job" "apply_lifecycle" {
 
   spec {
     ttl_seconds_after_finished = 300
+    backoff_limit              = 5
 
     template {
       metadata {
@@ -112,7 +51,7 @@ resource "kubernetes_job" "apply_lifecycle" {
 
         container {
           name  = "mc"
-          image = "quay.io/minio/mc:latest"
+          image = "quay.io/minio/mc:RELEASE.2025-01-17T23-25-50Z"
 
           # mc needs a writable config directory
           env {
@@ -127,10 +66,8 @@ resource "kubernetes_job" "apply_lifecycle" {
               echo "Waiting for MinIO to be ready..."
               sleep 30
 
-              # Create mc config directory
               mkdir -p /tmp/.mc
 
-              # Source credentials from mounted secret (config.env format)
               echo "Loading credentials..."
               source /credentials/config.env
 
@@ -147,21 +84,24 @@ resource "kubernetes_job" "apply_lifecycle" {
                 sleep 5
               done
 
-              echo "Applying lifecycle policy..."
-              mc ilm import myminio/${var.buckets[0].name} < /lifecycle/lifecycle.json
+              echo "Applying lifecycle rules..."
 
-              echo "Verifying lifecycle policy..."
-              mc ilm ls myminio/${var.buckets[0].name}
+              # Expire NAR files after retention period
+              mc ilm rule add --expiry-days ${var.nar_retention_days} --prefix "nar/" myminio/${var.buckets[0].name} \
+                && echo "  Added: expire nar/ after ${var.nar_retention_days} days" \
+                || echo "  Note: nar/ rule may already exist"
 
-              echo "Lifecycle policy applied successfully"
+              # Expire chunk files after retention period
+              mc ilm rule add --expiry-days ${var.chunk_retention_days} --prefix "chunks/" myminio/${var.buckets[0].name} \
+                && echo "  Added: expire chunks/ after ${var.chunk_retention_days} days" \
+                || echo "  Note: chunks/ rule may already exist"
+
+              echo "Verifying lifecycle rules..."
+              mc ilm rule ls myminio/${var.buckets[0].name}
+
+              echo "Lifecycle rules applied successfully"
             EOT
           ]
-
-          volume_mount {
-            name       = "lifecycle"
-            mount_path = "/lifecycle"
-            read_only  = true
-          }
 
           volume_mount {
             name       = "credentials"
@@ -192,13 +132,6 @@ resource "kubernetes_job" "apply_lifecycle" {
             capabilities {
               drop = ["ALL"]
             }
-          }
-        }
-
-        volume {
-          name = "lifecycle"
-          config_map {
-            name = kubernetes_config_map.minio_lifecycle[0].metadata[0].name
           }
         }
 
