@@ -168,6 +168,9 @@ module "docker_runner" {
   # Namespace-per-job isolation
   namespace_per_job = var.namespace_per_job_enabled
 
+  # Cache integration
+  bazel_cache_endpoint = var.bazel_cache_endpoint
+
   # Manager pod resources
   cpu_request    = var.docker_cpu_request
   memory_request = var.docker_memory_request
@@ -402,6 +405,9 @@ module "nix_runner" {
 
   # Namespace-per-job isolation
   namespace_per_job = var.namespace_per_job_enabled
+
+  # Cache integration
+  bazel_cache_endpoint = var.bazel_cache_endpoint
 
   # Attic cache integration
   attic_server = var.attic_server

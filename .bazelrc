@@ -84,6 +84,12 @@ test:ci --test_output=all
 build:ci-cached --config=ci
 build:ci-cached --config=ci-internal
 
+# Runner pool: for self-service bates-ils runners with BAZEL_REMOTE_CACHE env
+# Usage: bazel build --config=runner-pool //...
+build:runner-pool --jobs=4
+build:runner-pool --color=yes
+build:runner-pool --curses=no
+
 # Platform-specific settings (containers built via Nix, not rules_oci)
 # build:linux --platforms=@platforms//os:linux
 # build:macos --platforms=@platforms//os:macos

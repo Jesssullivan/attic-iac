@@ -207,5 +207,13 @@ locals {
             name = "ATTIC_CACHE"
             value = "${var.attic_cache}"
         %{endif~}
+        %{if var.bazel_cache_endpoint != "" && contains(["docker", "nix"], var.runner_type)~}
+        # Bazel remote cache
+        [[runners.kubernetes.pod_spec.containers]]
+          name = "build"
+          [[runners.kubernetes.pod_spec.containers.env]]
+            name = "BAZEL_REMOTE_CACHE"
+            value = "${var.bazel_cache_endpoint}"
+        %{endif~}
   TOML
 }

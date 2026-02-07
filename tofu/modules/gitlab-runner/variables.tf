@@ -314,6 +314,16 @@ variable "enrollment_alerts_enabled" {
 }
 
 # =============================================================================
+# Cache Integration
+# =============================================================================
+
+variable "bazel_cache_endpoint" {
+  description = "Bazel remote cache gRPC endpoint (injected as env var into job pods)"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
 # Additional Configuration
 # =============================================================================
 

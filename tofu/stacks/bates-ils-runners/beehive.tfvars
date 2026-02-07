@@ -111,6 +111,12 @@ service_monitor_labels = {
 enrollment_alerts_enabled = true
 
 # =============================================================================
+# Cache Integration
+# =============================================================================
+
+bazel_cache_endpoint = "grpc://bazel-cache.attic-cache-dev.svc.cluster.local:9092"
+
+# =============================================================================
 # Manager Pod Resources
 # =============================================================================
 # Resources for the runner manager pods (not job pods)

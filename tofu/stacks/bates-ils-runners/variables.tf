@@ -624,3 +624,13 @@ variable "enrollment_alerts_enabled" {
   type        = bool
   default     = false
 }
+
+# =============================================================================
+# Cache Integration
+# =============================================================================
+
+variable "bazel_cache_endpoint" {
+  description = "Bazel remote cache gRPC endpoint for docker/nix runners"
+  type        = string
+  default     = ""
+}

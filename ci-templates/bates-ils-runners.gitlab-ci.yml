@@ -36,6 +36,8 @@
     - linux
     - amd64
   image: alpine:3.21
+  variables:
+    BAZEL_REMOTE_CACHE: ${BAZEL_REMOTE_CACHE:-""}
 
 # Docker-in-Docker for container builds
 .dind-job:
@@ -79,6 +81,9 @@
     - nix
     - flakes
   image: docker.nix-community.org/nixpkgs/nix-flakes:nixos-unstable
+  variables:
+    NIX_CONFIG: "experimental-features = nix-command flakes"
+    BAZEL_REMOTE_CACHE: ${BAZEL_REMOTE_CACHE:-""}
 
 # =============================================================================
 # Specialized Job Templates
