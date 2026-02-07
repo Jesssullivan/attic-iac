@@ -71,8 +71,8 @@ if [ -f "$REPO_ROOT/.gitlab-ci.yml" ]; then
   #   - The Bazel sandbox may not have PyYAML installed
   #   - GitLab CI files can use custom tags (!reference) that safe_load rejects
   # The GitLab API and nix fmt already validate full YAML correctness in CI.
-  if grep -q '^stages:' "$REPO_ROOT/.gitlab-ci.yml" \
-     && grep -q '^variables:' "$REPO_ROOT/.gitlab-ci.yml"; then
+  if grep -q '^stages:' "$REPO_ROOT/.gitlab-ci.yml" &&
+    grep -q '^variables:' "$REPO_ROOT/.gitlab-ci.yml"; then
     echo "  PASS: .gitlab-ci.yml has expected structure"
   else
     echo "  FAIL: .gitlab-ci.yml missing expected top-level keys (stages, variables)"

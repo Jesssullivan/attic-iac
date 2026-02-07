@@ -32,9 +32,9 @@ sh_test(
     name = "config_validation",
     srcs = ["config_validation.sh"],
     data = [
+        "//:gitignore",
         "//:gitlab_ci",
         "//:nix_files",
-        "//:gitignore",
     ],
     tags = ["validation"],
 )
