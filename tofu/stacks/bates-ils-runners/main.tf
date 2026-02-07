@@ -116,6 +116,18 @@ resource "kubernetes_namespace_v1" "runners" {
 }
 
 # =============================================================================
+# GitLab Agent RBAC (ci_job impersonation)
+# =============================================================================
+
+module "agent_rbac" {
+  source = "../../modules/gitlab-agent-rbac"
+
+  namespace = var.namespace
+
+  depends_on = [kubernetes_namespace_v1.runners]
+}
+
+# =============================================================================
 # Docker Runner - Standard builds
 # =============================================================================
 

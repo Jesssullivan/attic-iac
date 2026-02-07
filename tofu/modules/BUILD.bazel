@@ -56,6 +56,14 @@ tofu_module(
 )
 
 tofu_module(
+    name = "gitlab_agent_rbac",
+    srcs = glob(["gitlab-agent-rbac/*.tf"]),
+    providers = [
+        "kubernetes",
+    ],
+)
+
+tofu_module(
     name = "hpa_deployment",
     srcs = glob(["hpa-deployment/*.tf"]),
     providers = ["kubernetes"],
@@ -135,6 +143,16 @@ tofu_validate(
 tofu_validate(
     name = "gitlab_user_runner_validate",
     module = ":gitlab_user_runner",
+    tags = [
+        "external",
+        "tofu",
+        "validation",
+    ],
+)
+
+tofu_validate(
+    name = "gitlab_agent_rbac_validate",
+    module = ":gitlab_agent_rbac",
     tags = [
         "external",
         "tofu",
@@ -232,6 +250,15 @@ tofu_fmt_test(
 )
 
 tofu_fmt_test(
+    name = "gitlab_agent_rbac_fmt_test",
+    module = ":gitlab_agent_rbac",
+    tags = [
+        "formatting",
+        "tofu",
+    ],
+)
+
+tofu_fmt_test(
     name = "hpa_deployment_fmt_test",
     module = ":hpa_deployment",
     tags = [
@@ -278,6 +305,7 @@ filegroup(
         ":bazel_cache",
         ":cnpg_operator",
         ":dns_record",
+        ":gitlab_agent_rbac",
         ":gitlab_runner",
         ":gitlab_user_runner",
         ":hpa_deployment",
@@ -301,6 +329,7 @@ filegroup(
 filegroup(
     name = "k8s_modules",
     srcs = [
+        ":gitlab_agent_rbac",
         ":gitlab_runner",
         ":gitlab_user_runner",
         ":hpa_deployment",
@@ -327,6 +356,7 @@ test_suite(
         ":bazel_cache_validate",
         ":cnpg_operator_validate",
         ":dns_record_validate",
+        ":gitlab_agent_rbac_validate",
         ":gitlab_runner_validate",
         ":gitlab_user_runner_validate",
         ":hpa_deployment_validate",
@@ -344,6 +374,7 @@ test_suite(
         ":bazel_cache_fmt_test",
         ":cnpg_operator_fmt_test",
         ":dns_record_fmt_test",
+        ":gitlab_agent_rbac_fmt_test",
         ":gitlab_runner_fmt_test",
         ":gitlab_user_runner_fmt_test",
         ":hpa_deployment_fmt_test",
