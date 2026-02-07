@@ -69,10 +69,22 @@ EOF
 SECRET_B64=""
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -s | --sub) SUB="$2"; shift 2 ;;
-    -d | --days) DAYS="$2"; shift 2 ;;
-    -c | --cache) CACHE="$2"; shift 2 ;;
-    --admin) ADMIN=true; shift ;;
+    -s | --sub)
+      SUB="$2"
+      shift 2
+      ;;
+    -d | --days)
+      DAYS="$2"
+      shift 2
+      ;;
+    -c | --cache)
+      CACHE="$2"
+      shift 2
+      ;;
+    --admin)
+      ADMIN=true
+      shift
+      ;;
     -h | --help) usage ;;
     -*)
       echo "Unknown option: $1" >&2
@@ -111,8 +123,8 @@ b64url() { base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n'; }
 HEADER=$(printf '{"alg":"HS256","typ":"JWT"}' | b64url)
 
 # Compute expiry
-EXP=$(python3 -c "import time; print(int(time.time() + $DAYS * 86400))" 2>/dev/null \
-  || echo $(( $(date +%s) + ${DAYS%.*} * 86400 )))
+EXP=$(python3 -c "import time; print(int(time.time() + $DAYS * 86400))" 2>/dev/null ||
+  echo $(($(date +%s) + ${DAYS%.*} * 86400)))
 
 # Build claims
 if $ADMIN; then
