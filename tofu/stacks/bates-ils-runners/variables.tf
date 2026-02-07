@@ -25,6 +25,19 @@ variable "gitlab_url" {
   default     = "https://gitlab.com"
 }
 
+variable "gitlab_token" {
+  description = "GitLab API token with create_runner scope (for automated token lifecycle)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gitlab_group_id" {
+  description = "GitLab group ID for automated runner registration (0 = use manual tokens)"
+  type        = number
+  default     = 0
+}
+
 # =============================================================================
 # Namespace
 # =============================================================================

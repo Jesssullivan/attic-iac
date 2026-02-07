@@ -48,6 +48,14 @@ tofu_module(
 )
 
 tofu_module(
+    name = "gitlab_user_runner",
+    srcs = glob(["gitlab-user-runner/*.tf"]),
+    providers = [
+        "gitlab",
+    ],
+)
+
+tofu_module(
     name = "hpa_deployment",
     srcs = glob(["hpa-deployment/*.tf"]),
     providers = ["kubernetes"],
@@ -117,6 +125,16 @@ tofu_validate(
 tofu_validate(
     name = "gitlab_runner_validate",
     module = ":gitlab_runner",
+    tags = [
+        "external",
+        "tofu",
+        "validation",
+    ],
+)
+
+tofu_validate(
+    name = "gitlab_user_runner_validate",
+    module = ":gitlab_user_runner",
     tags = [
         "external",
         "tofu",
@@ -205,6 +223,15 @@ tofu_fmt_test(
 )
 
 tofu_fmt_test(
+    name = "gitlab_user_runner_fmt_test",
+    module = ":gitlab_user_runner",
+    tags = [
+        "formatting",
+        "tofu",
+    ],
+)
+
+tofu_fmt_test(
     name = "hpa_deployment_fmt_test",
     module = ":hpa_deployment",
     tags = [
@@ -252,6 +279,7 @@ filegroup(
         ":cnpg_operator",
         ":dns_record",
         ":gitlab_runner",
+        ":gitlab_user_runner",
         ":hpa_deployment",
         ":minio_operator",
         ":minio_tenant",
@@ -274,6 +302,7 @@ filegroup(
     name = "k8s_modules",
     srcs = [
         ":gitlab_runner",
+        ":gitlab_user_runner",
         ":hpa_deployment",
     ],
 )
@@ -299,6 +328,7 @@ test_suite(
         ":cnpg_operator_validate",
         ":dns_record_validate",
         ":gitlab_runner_validate",
+        ":gitlab_user_runner_validate",
         ":hpa_deployment_validate",
         ":minio_operator_validate",
         ":minio_tenant_validate",
@@ -315,6 +345,7 @@ test_suite(
         ":cnpg_operator_fmt_test",
         ":dns_record_fmt_test",
         ":gitlab_runner_fmt_test",
+        ":gitlab_user_runner_fmt_test",
         ":hpa_deployment_fmt_test",
         ":minio_operator_fmt_test",
         ":minio_tenant_fmt_test",

@@ -15,6 +15,10 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
+    gitlab = {
+      source  = "gitlabhq/gitlab"
+      version = "~> 17.0"
+    }
   }
 }
 
@@ -28,6 +32,71 @@ provider "helm" {
     config_path    = var.k8s_config_path != "" ? var.k8s_config_path : null
     config_context = var.cluster_context
   }
+}
+
+provider "gitlab" {
+  token = var.gitlab_token
+}
+
+# =============================================================================
+# Automated Runner Token Registration
+# =============================================================================
+# When gitlab_group_id is set, tokens are managed automatically via
+# gitlab_user_runner. Otherwise, fall back to manually-provided tokens.
+
+locals {
+  use_auto_tokens = var.gitlab_group_id != 0
+
+  docker_token = local.use_auto_tokens ? module.docker_token[0].token : var.docker_runner_token
+  dind_token   = local.use_auto_tokens ? module.dind_token[0].token : var.dind_runner_token
+  rocky8_token = local.use_auto_tokens ? module.rocky8_token[0].token : var.rocky8_runner_token
+  rocky9_token = local.use_auto_tokens ? module.rocky9_token[0].token : var.rocky9_runner_token
+  nix_token    = local.use_auto_tokens ? module.nix_token[0].token : var.nix_runner_token
+}
+
+module "docker_token" {
+  source = "../../modules/gitlab-user-runner"
+  count  = local.use_auto_tokens && var.deploy_docker_runner ? 1 : 0
+
+  group_id    = var.gitlab_group_id
+  tag_list    = ["docker", "linux", "amd64"]
+  description = "bates-docker: Standard Alpine-based builds"
+}
+
+module "dind_token" {
+  source = "../../modules/gitlab-user-runner"
+  count  = local.use_auto_tokens && var.deploy_dind_runner ? 1 : 0
+
+  group_id    = var.gitlab_group_id
+  tag_list    = ["docker", "dind", "privileged"]
+  description = "bates-dind: Docker-in-Docker container builds"
+}
+
+module "rocky8_token" {
+  source = "../../modules/gitlab-user-runner"
+  count  = local.use_auto_tokens && var.deploy_rocky8_runner ? 1 : 0
+
+  group_id    = var.gitlab_group_id
+  tag_list    = ["rocky8", "rhel8", "linux"]
+  description = "bates-rocky8: RHEL 8 compatibility builds"
+}
+
+module "rocky9_token" {
+  source = "../../modules/gitlab-user-runner"
+  count  = local.use_auto_tokens && var.deploy_rocky9_runner ? 1 : 0
+
+  group_id    = var.gitlab_group_id
+  tag_list    = ["rocky9", "rhel9", "linux"]
+  description = "bates-rocky9: RHEL 9 compatibility builds"
+}
+
+module "nix_token" {
+  source = "../../modules/gitlab-user-runner"
+  count  = local.use_auto_tokens && var.deploy_nix_runner ? 1 : 0
+
+  group_id    = var.gitlab_group_id
+  tag_list    = ["nix", "flakes"]
+  description = "bates-nix: Nix flake builds with Attic cache"
 }
 
 # =============================================================================
@@ -62,7 +131,7 @@ module "docker_runner" {
   depends_on = [kubernetes_namespace_v1.runners]
 
   gitlab_url   = var.gitlab_url
-  runner_token = var.docker_runner_token
+  runner_token = local.docker_token
 
   runner_tags     = var.docker_runner_tags
   concurrent_jobs = var.docker_concurrent_jobs
@@ -116,7 +185,7 @@ module "dind_runner" {
   depends_on = [kubernetes_namespace_v1.runners]
 
   gitlab_url   = var.gitlab_url
-  runner_token = var.dind_runner_token
+  runner_token = local.dind_token
 
   runner_tags     = var.dind_runner_tags
   concurrent_jobs = var.dind_concurrent_jobs
@@ -177,7 +246,7 @@ module "rocky8_runner" {
   depends_on = [kubernetes_namespace_v1.runners]
 
   gitlab_url   = var.gitlab_url
-  runner_token = var.rocky8_runner_token
+  runner_token = local.rocky8_token
 
   runner_tags     = var.rocky8_runner_tags
   concurrent_jobs = var.rocky8_concurrent_jobs
@@ -231,7 +300,7 @@ module "rocky9_runner" {
   depends_on = [kubernetes_namespace_v1.runners]
 
   gitlab_url   = var.gitlab_url
-  runner_token = var.rocky9_runner_token
+  runner_token = local.rocky9_token
 
   runner_tags     = var.rocky9_runner_tags
   concurrent_jobs = var.rocky9_concurrent_jobs
@@ -285,7 +354,7 @@ module "nix_runner" {
   depends_on = [kubernetes_namespace_v1.runners]
 
   gitlab_url   = var.gitlab_url
-  runner_token = var.nix_runner_token
+  runner_token = local.nix_token
 
   runner_tags     = var.nix_runner_tags
   concurrent_jobs = var.nix_concurrent_jobs

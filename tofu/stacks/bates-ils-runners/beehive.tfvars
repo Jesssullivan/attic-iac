@@ -7,6 +7,10 @@ cluster_context = "bates-ils/projects/kubernetes/gitlab-agents:beehive"
 namespace       = "bates-ils-runners"
 gitlab_url      = "https://gitlab.com"
 
+# GitLab group ID for automated runner token registration
+# Set to 0 to use manual TF_VAR_*_runner_token variables instead
+# gitlab_group_id = 12345678  # Set to numeric bates-ils group ID
+
 # =============================================================================
 # Runner Deployment Toggles
 # =============================================================================
