@@ -8,7 +8,7 @@ A set of OpenTofu modules, Nix packages, and a SvelteKit monitoring dashboard th
 form a recursive infrastructure system for Gitlab.  GitLab runners deploy themselves as a HPA runner pool, the Nix
 binary cache caches its own derivations, bazel overlay orchestrates intra enterprise deployments, 
 intra enterprise automations (such as your companies pool of autonmous clankers, Steve, RenovateBot or your manager checking in every now and again) 
-- all running on infrastructure managed by this code.  I think its kinda neat. 
+all running on infrastructure managed by this code.  I think its kinda neat. 
 
 ## Architecture
 
