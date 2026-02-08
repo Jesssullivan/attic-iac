@@ -1,0 +1,7 @@
+config:
+  line-length: false
+  single-h1: false
+  no-bare-urls: false
+  blanks-around-fences: false
+  no-trailing-punctuation: false
+  fenced-code-language: false

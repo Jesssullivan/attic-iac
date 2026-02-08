@@ -235,7 +235,7 @@ resource "kubernetes_deployment" "dashboard" {
         service_account_name = kubernetes_service_account.dashboard.metadata[0].name
 
         dynamic "image_pull_secrets" {
-          for_each = local.effective_pull_secret != "" ? [local.effective_pull_secret] : []
+          for_each = toset(local.effective_pull_secret != "" ? [local.effective_pull_secret] : [])
           content {
             name = image_pull_secrets.value
           }
