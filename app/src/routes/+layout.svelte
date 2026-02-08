@@ -3,7 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import Sidebar from '$lib/components/nav/Sidebar.svelte';
 	import Breadcrumb from '$lib/components/nav/Breadcrumb.svelte';
-	import { initEnvironments } from '$lib/stores/environment';
+	import { initEnvironments } from '$lib/stores/environment.svelte';
 
 	let { data, children }: { data: any; children: Snippet } = $props();
 
