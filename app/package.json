@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prebuild": "tsx scripts/generate-environments.ts",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -29,9 +30,11 @@
     "svelte": "^5.25.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vite": "^6.2.6",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "yaml": "^2.7.0"
   },
   "engines": {
     "node": ">=20.0.0"

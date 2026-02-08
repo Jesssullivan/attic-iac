@@ -6,8 +6,6 @@ import { env } from "$env/dynamic/private";
  * Development: uses KUBECONFIG or kubectl proxy.
  */
 
-const K8S_NS = "bates-ils-runners";
-
 interface K8sListResponse<T> {
   kind: string;
   items: T[];
@@ -18,8 +16,11 @@ export class K8sClient {
   private baseUrl: string;
   private token: string | null;
   private available: boolean | null = null;
+  private namespace: string;
 
-  constructor() {
+  constructor(namespace?: string) {
+    // Get namespace from parameter, environment variable, or default
+    this.namespace = namespace ?? env.K8S_NAMESPACE ?? "gitlab-runners";
     const inCluster = env.KUBERNETES_SERVICE_HOST;
     if (inCluster) {
       this.baseUrl = `https://${env.KUBERNETES_SERVICE_HOST}:${env.KUBERNETES_SERVICE_PORT}`;
@@ -35,12 +36,16 @@ export class K8sClient {
   async isAvailable(): Promise<boolean> {
     if (this.available !== null) return this.available;
     try {
-      const response = await this.fetch("/api/v1/namespaces/" + K8S_NS);
+      const response = await this.fetch("/api/v1/namespaces/" + this.namespace);
       this.available = response.ok;
     } catch {
       this.available = false;
     }
     return this.available;
+  }
+
+  getNamespace(): string {
+    return this.namespace;
   }
 
   resetAvailability() {
@@ -88,28 +93,28 @@ export class K8sClient {
 
   async listPods(): Promise<K8sPod[]> {
     const data = await this.request<K8sListResponse<K8sPod>>(
-      `/api/v1/namespaces/${K8S_NS}/pods`,
+      `/api/v1/namespaces/${this.namespace}/pods`,
     );
     return data.items;
   }
 
   async listDeployments(): Promise<K8sDeployment[]> {
     const data = await this.request<K8sListResponse<K8sDeployment>>(
-      `/apis/apps/v1/namespaces/${K8S_NS}/deployments`,
+      `/apis/apps/v1/namespaces/${this.namespace}/deployments`,
     );
     return data.items;
   }
 
   async listHPAs(): Promise<K8sHPA[]> {
     const data = await this.request<K8sListResponse<K8sHPA>>(
-      `/apis/autoscaling/v2/namespaces/${K8S_NS}/horizontalpodautoscalers`,
+      `/apis/autoscaling/v2/namespaces/${this.namespace}/horizontalpodautoscalers`,
     );
     return data.items;
   }
 
   async listEvents(limit: number = 50): Promise<K8sEvent[]> {
     const data = await this.request<K8sListResponse<K8sEvent>>(
-      `/api/v1/namespaces/${K8S_NS}/events?limit=${limit}&fieldSelector=type!=Normal`,
+      `/api/v1/namespaces/${this.namespace}/events?limit=${limit}&fieldSelector=type!=Normal`,
     );
     return data.items;
   }

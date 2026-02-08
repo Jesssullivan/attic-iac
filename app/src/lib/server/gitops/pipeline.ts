@@ -6,9 +6,14 @@ import {
 } from "./repository";
 import { parseTfVars, serializeTfVars, applyChanges } from "./tfvars-parser";
 import { computeDiff, unifiedDiff } from "./diff";
+import { getTfvarsPath, getDefaultEnvironment } from "./config";
 import type { ConfigDiff } from "$lib/types";
+import type { Environment } from "$lib/types/environment";
 
-const TFVARS_PATH = "tofu/stacks/bates-ils-runners/beehive.tfvars";
+// Default tfvars path (can be overridden via function parameters)
+function getDefaultTfvarsPath(): string {
+  return getTfvarsPath(getDefaultEnvironment());
+}
 
 export interface ChangeRequest {
   changes: Record<string, string | number | boolean>;
@@ -26,8 +31,12 @@ export interface ChangeResult {
 /**
  * Read the current tfvars from the repo and return parsed values.
  */
-export async function getCurrentConfig(ref: string = "main") {
-  const content = await readFile(TFVARS_PATH, ref);
+export async function getCurrentConfig(
+  ref: string = "main",
+  environment?: Environment | string
+) {
+  const tfvarsPath = environment ? getTfvarsPath(environment) : getDefaultTfvarsPath();
+  const content = await readFile(tfvarsPath, ref);
   return parseTfVars(content);
 }
 
@@ -36,9 +45,12 @@ export async function getCurrentConfig(ref: string = "main") {
  */
 export async function submitChanges(
   request: ChangeRequest,
+  environment?: Environment | string
 ): Promise<ChangeResult> {
+  const tfvarsPath = environment ? getTfvarsPath(environment) : getDefaultTfvarsPath();
+
   // 1. Read current config
-  const currentContent = await readFile(TFVARS_PATH);
+  const currentContent = await readFile(tfvarsPath);
   const currentDoc = parseTfVars(currentContent);
 
   // 2. Apply changes
@@ -56,7 +68,7 @@ export async function submitChanges(
   // 5. Commit changes
   const changedKeys = diffs.map((d) => d.key).join(", ");
   await commitFile(
-    TFVARS_PATH,
+    tfvarsPath,
     newContent,
     `feat(runners): update ${changedKeys}\n\n${request.description}`,
     branch,

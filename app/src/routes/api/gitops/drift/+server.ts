@@ -2,6 +2,7 @@ import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { detectDrift } from "$lib/server/gitops/drift";
 import { parseTfVars } from "$lib/server/gitops/tfvars-parser";
+import { getTfvarsPath, getDefaultEnvironment } from "$lib/server/gitops/config";
 import { k8sClient } from "$lib/server/k8s/client";
 import type { K8sHPA } from "$lib/server/k8s/client";
 import { MOCK_HPA_STATUS } from "$lib/mocks";
@@ -32,12 +33,13 @@ function mapHPA(k8s: K8sHPA): HPAStatus {
   };
 }
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ url }) => {
   try {
-    const tfvarsPath = resolve(
-      "..",
-      "tofu/stacks/bates-ils-runners/beehive.tfvars",
-    );
+    // Get environment from query parameter, or use default
+    const environment = url.searchParams.get("env") ?? getDefaultEnvironment();
+    const relativePath = getTfvarsPath(environment);
+    const tfvarsPath = resolve("..", relativePath);
+
     const content = readFileSync(tfvarsPath, "utf-8");
     const doc = parseTfVars(content);
 
@@ -50,8 +52,8 @@ export const GET: RequestHandler = async () => {
     }
 
     const drifts = detectDrift(doc, hpas);
-    return json({ drifts });
-  } catch {
-    return json({ drifts: [] });
+    return json({ environment, drifts });
+  } catch (error) {
+    return json({ error: String(error), drifts: [] });
   }
 };

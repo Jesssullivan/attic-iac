@@ -1,40 +1,47 @@
-export const ENVIRONMENTS = ["beehive", "rigel"] as const;
-export type Environment = (typeof ENVIRONMENTS)[number];
+// Generated environment configuration
+// This file loads environment configs from the generated environments.json
+// which is created from config/organization.yaml during the prebuild step
 
-export const ENV_LABELS: Record<Environment, string> = {
-  beehive: "Beehive (Dev)",
-  rigel: "Rigel (Staging/Prod)",
-};
+import environmentsJson from '../config/environments.json';
 
-export const ENV_DOMAINS: Record<Environment, string> = {
-  beehive: "beehive.bates.edu",
-  rigel: "rigel.bates.edu",
-};
-
+// Environment configuration interface
 export interface EnvironmentConfig {
-  name: Environment;
-  label: string;
-  domain: string;
-  namespace: string;
-  gitlab_url: string;
-  gitlab_project_id: string;
+	name: string;
+	label: string;
+	domain: string;
+	namespace: string;
+	gitlab_url: string;
+	gitlab_project_id: string;
+	role: string;
+	context: string;
 }
 
-export const ENVIRONMENT_CONFIGS: Record<Environment, EnvironmentConfig> = {
-  beehive: {
-    name: "beehive",
-    label: "Beehive (Dev)",
-    domain: "beehive.bates.edu",
-    namespace: "bates-ils-runners",
-    gitlab_url: "https://gitlab.com",
-    gitlab_project_id: "78189586",
-  },
-  rigel: {
-    name: "rigel",
-    label: "Rigel (Staging/Prod)",
-    domain: "rigel.bates.edu",
-    namespace: "bates-ils-runners",
-    gitlab_url: "https://gitlab.com",
-    gitlab_project_id: "78189586",
-  },
-};
+// Load environments from generated JSON
+const environments = environmentsJson as EnvironmentConfig[];
+
+// Export environment names as const array
+export const ENVIRONMENTS = environments.map((env) => env.name) as string[];
+export type Environment = (typeof ENVIRONMENTS)[number];
+
+// Generate lookup records from the environment configs
+export const ENV_LABELS: Record<string, string> = Object.fromEntries(
+	environments.map((env) => [env.name, env.label])
+);
+
+export const ENV_DOMAINS: Record<string, string> = Object.fromEntries(
+	environments.map((env) => [env.name, env.domain])
+);
+
+export const ENVIRONMENT_CONFIGS: Record<string, EnvironmentConfig> = Object.fromEntries(
+	environments.map((env) => [env.name, env])
+);
+
+// Helper function to get environment config by name
+export function getEnvironmentConfig(name: string): EnvironmentConfig | undefined {
+	return ENVIRONMENT_CONFIGS[name];
+}
+
+// Helper function to check if an environment name is valid
+export function isValidEnvironment(name: string): name is Environment {
+	return ENVIRONMENTS.includes(name);
+}

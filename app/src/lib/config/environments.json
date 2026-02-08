@@ -1,0 +1,22 @@
+[
+  {
+    "name": "beehive",
+    "label": "Beehive (Dev)",
+    "domain": "beehive.bates.edu",
+    "namespace": "bates-ils-runners",
+    "gitlab_url": "https://gitlab.com",
+    "gitlab_project_id": "78189586",
+    "role": "development",
+    "context": "bates-ils/projects/kubernetes/gitlab-agents:beehive"
+  },
+  {
+    "name": "rigel",
+    "label": "Rigel (Prod)",
+    "domain": "rigel.bates.edu",
+    "namespace": "bates-ils-runners",
+    "gitlab_url": "https://gitlab.com",
+    "gitlab_project_id": "78189586",
+    "role": "production",
+    "context": "bates-ils/projects/kubernetes/gitlab-agents:rigel"
+  }
+]
