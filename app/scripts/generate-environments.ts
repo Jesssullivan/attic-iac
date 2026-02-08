@@ -6,7 +6,7 @@
  * that the runner dashboard can import for environment-specific settings.
  */
 
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parse } from 'yaml';
@@ -66,8 +66,19 @@ function generateLabel(cluster: OrganizationConfig['clusters'][0]): string {
 
 async function main() {
 	try {
-		// Read organization.yaml from parent directory
+		// Read organization.yaml from parent directory, fall back to example
 		const orgConfigPath = resolve(__dirname, '../../config/organization.yaml');
+		const exampleConfigPath = resolve(__dirname, '../../config/organization.example.yaml');
+
+		if (!existsSync(orgConfigPath)) {
+			if (existsSync(exampleConfigPath)) {
+				console.log(`organization.yaml not found, using example config`);
+				copyFileSync(exampleConfigPath, orgConfigPath);
+			} else {
+				throw new Error('Neither organization.yaml nor organization.example.yaml found');
+			}
+		}
+
 		console.log(`Reading organization config from: ${orgConfigPath}`);
 
 		const orgConfigYaml = readFileSync(orgConfigPath, 'utf-8');

@@ -98,20 +98,40 @@
           ];
 
           # Runner Dashboard: pnpm build wrapper
+          # Source includes workspace root (lockfile, config) + app directory
+          runnerDashboardSrc = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type:
+              let
+                baseName = builtins.baseNameOf path;
+                relPath = pkgs.lib.removePrefix (toString ./.) path;
+              in
+              # Workspace root files
+              baseName == "package.json"
+              || baseName == "pnpm-lock.yaml"
+              || baseName == "pnpm-workspace.yaml"
+              || baseName == ".npmrc"
+              # App directory
+              || pkgs.lib.hasPrefix "/app" relPath
+              # Config directory (for prebuild script)
+              || pkgs.lib.hasPrefix "/config" relPath;
+          };
+
           runnerDashboard = pkgs.stdenv.mkDerivation {
             pname = "runner-dashboard";
             version = "0.1.0";
-            src = ./app;
+            src = runnerDashboardSrc;
             nativeBuildInputs = [ pkgs.nodejs_22 pkgs.nodePackages.pnpm ];
             buildPhase = ''
               export HOME=$TMPDIR
               pnpm install --frozen-lockfile
+              cd app
               pnpm build
             '';
             installPhase = ''
               mkdir -p $out
-              cp -r build/* $out/
-              cp package.json $out/
+              cp -r app/build/* $out/
+              cp app/package.json $out/
             '';
           };
 
