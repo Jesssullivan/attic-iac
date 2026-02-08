@@ -14,12 +14,12 @@ variable "k8s_config_path" {
 }
 
 variable "cluster_context" {
-  description = "GitLab Kubernetes Agent context (e.g., mygroup/kubernetes/agents:dev)"
+  description = "Kubernetes context name (GitLab Agent format or local kubeconfig context)"
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+/[^:]+:[a-z0-9-]+$", var.cluster_context))
-    error_message = "cluster_context must be a valid GitLab Agent context (group/path:agent)"
+    condition     = length(var.cluster_context) > 0
+    error_message = "cluster_context must not be empty"
   }
 }
 
