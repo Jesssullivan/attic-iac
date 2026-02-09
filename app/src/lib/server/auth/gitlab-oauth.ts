@@ -78,6 +78,23 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   return response.json();
 }
 
+export async function revokeToken(token: string): Promise<void> {
+  const config = getConfig();
+  try {
+    await fetch(`${config.gitlabUrl}/oauth/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        token,
+      }),
+    });
+  } catch {
+    // Best-effort revocation; don't block logout
+  }
+}
+
 export async function getUserInfo(
   accessToken: string,
   gitlabUrl?: string,
