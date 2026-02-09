@@ -166,16 +166,23 @@ locals {
       name = "${var.runner_name}"
       executor = "kubernetes"
       ${length(local.runner_env_vars) > 0 ? "environment = ${jsonencode(local.runner_env_vars)}" : ""}
+      [runners.feature_flags]
+        FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY = ${var.use_legacy_exec_strategy}
+        FF_PRINT_POD_EVENTS = ${var.print_pod_events}
       [runners.kubernetes]
         namespace = "${var.namespace}"
         image = "${local.default_image}"
         privileged = ${local.privileged}
+        poll_timeout = ${var.poll_timeout}
+        poll_interval = ${var.poll_interval}
         %{if var.namespace_per_job~}
         namespace_per_job = true
         namespace_per_job_prefix = "${var.namespace_per_job_prefix}"
         %{endif~}
-        %{if local.dind_enabled~}
+        %{if local.dind_enabled && var.dind_sidecar_in_toml~}
         # DinD service (--tls=false disables TLS in the daemon)
+        # NOTE: Only enable if CI jobs do NOT define their own DinD service.
+        # Duplicate DinD services cause port 2375 conflicts.
         [[runners.kubernetes.services]]
           name = "docker"
           alias = "docker"

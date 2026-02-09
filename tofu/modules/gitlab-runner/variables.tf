@@ -73,7 +73,7 @@ variable "create_namespace" {
 variable "chart_version" {
   description = "GitLab Runner Helm chart version"
   type        = string
-  default     = "0.71.0"
+  default     = "0.78.0"
 }
 
 variable "privileged" {
@@ -192,6 +192,12 @@ variable "docker_version" {
   description = "Docker version for DinD service"
   type        = string
   default     = "27-dind"
+}
+
+variable "dind_sidecar_in_toml" {
+  description = "Inject DinD service sidecar via runner TOML config. Disable if CI jobs provide their own DinD service to avoid port conflicts."
+  type        = bool
+  default     = false
 }
 
 # =============================================================================
@@ -332,6 +338,30 @@ variable "bazel_cache_endpoint" {
 # =============================================================================
 # Additional Configuration
 # =============================================================================
+
+variable "use_legacy_exec_strategy" {
+  description = "Use legacy Kubernetes exec strategy instead of attach. Disabled by default: the exec strategy is broken with service containers in Runner <=17.8. Chart 0.78.0+ (Runner 17.9) adds informer-based pod detection that fixes the attach strategy race condition."
+  type        = bool
+  default     = false
+}
+
+variable "print_pod_events" {
+  description = "Print Kubernetes pod events in job logs for debugging"
+  type        = bool
+  default     = true
+}
+
+variable "poll_timeout" {
+  description = "Timeout in seconds for waiting for pod to be running"
+  type        = number
+  default     = 600
+}
+
+variable "poll_interval" {
+  description = "Interval in seconds between pod status checks"
+  type        = number
+  default     = 3
+}
 
 variable "additional_values" {
   description = "Additional Helm values in YAML format"

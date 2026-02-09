@@ -33,7 +33,7 @@ export async function listGroupRunners(
   client: GitLabClient = gitlab,
 ): Promise<GitLabRunner[]> {
   return client.request<GitLabRunner[]>(`/groups/${groupId}/runners`, {
-    params: { per_page: "100" },
+    params: { per_page: "100", type: "group_type" },
   });
 }
 
