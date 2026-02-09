@@ -40,5 +40,9 @@ export function setSession(cookies: Cookies, session: Session) {
 }
 
 export function clearSession(cookies: Cookies) {
-  cookies.delete(SESSION_COOKIE, { path: "/" });
+  cookies.delete(SESSION_COOKIE, {
+    path: "/",
+    secure: true,
+    sameSite: "lax",
+  });
 }
