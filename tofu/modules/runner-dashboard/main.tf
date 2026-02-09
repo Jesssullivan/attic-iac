@@ -356,6 +356,12 @@ resource "kubernetes_deployment" "dashboard" {
             }
           }
 
+          # Trust K8s cluster CA for in-cluster API calls
+          env {
+            name  = "NODE_EXTRA_CA_CERTS"
+            value = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          }
+
           security_context {
             allow_privilege_escalation = false
             read_only_root_filesystem  = true
