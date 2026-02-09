@@ -1,6 +1,6 @@
 import { gitlab, type GitLabClient } from "./client";
 
-interface GitLabRunner {
+export interface GitLabRunner {
   id: number;
   description: string;
   active: boolean;

@@ -58,3 +58,9 @@ variable "limit_max_memory" {
   type        = string
   default     = "8Gi"
 }
+
+variable "priority_classes_enabled" {
+  description = "Create PriorityClasses for runner manager and job pods"
+  type        = bool
+  default     = false
+}

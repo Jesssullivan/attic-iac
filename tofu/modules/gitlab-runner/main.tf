@@ -116,6 +116,15 @@ resource "helm_release" "gitlab_runner" {
     value = var.memory_limit
   }
 
+  # Manager pod priority class
+  dynamic "set" {
+    for_each = var.manager_priority_class_name != "" ? [var.manager_priority_class_name] : []
+    content {
+      name  = "priorityClassName"
+      value = set.value
+    }
+  }
+
   # Metrics
   set {
     name  = "metrics.enabled"

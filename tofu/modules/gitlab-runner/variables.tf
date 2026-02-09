@@ -447,3 +447,19 @@ variable "cleanup_failed_cache_extract" {
   type        = bool
   default     = true
 }
+
+# =============================================================================
+# PriorityClass Configuration
+# =============================================================================
+
+variable "manager_priority_class_name" {
+  description = "PriorityClass name for runner manager pod"
+  type        = string
+  default     = ""
+}
+
+variable "job_priority_class_name" {
+  description = "PriorityClass name for CI job pods"
+  type        = string
+  default     = ""
+}

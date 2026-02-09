@@ -204,6 +204,9 @@ locals {
         memory_request = "${var.job_memory_request}"
         cpu_limit = "${var.job_cpu_limit}"
         memory_limit = "${var.job_memory_limit}"
+        %{if var.job_priority_class_name != ""~}
+        pod_priority_class_name = "${var.job_priority_class_name}"
+        %{endif~}
         %{if var.cleanup_enabled~}
         pod_termination_grace_period_seconds = ${var.cleanup_grace_seconds}
         cleanup_grace_period_seconds = ${var.cleanup_grace_period_seconds}
