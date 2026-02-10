@@ -15,11 +15,11 @@
     }
   }
 
-  header_up X-Client-Cert-CN {tls_client_subject}
-  header_up X-Client-Cert-Fingerprint {tls_client_fingerprint}
-  header_up X-Webauth-User {tls_client_subject}
-
-  reverse_proxy localhost:${backend_port}
+  reverse_proxy localhost:${backend_port} {
+    header_up X-Client-Cert-CN {tls_client_subject}
+    header_up X-Client-Cert-Fingerprint {tls_client_fingerprint}
+    header_up X-Webauth-User {tls_client_subject}
+  }
 }
 %{ endif ~}
 
@@ -38,10 +38,10 @@
     remote_ip 100.64.0.0/10
   }
 
-  header_up X-Webauth-User {http.auth.user.tailscale_user}
-  header_up X-Webauth-Email {http.auth.user.tailscale_user}
-
-  reverse_proxy localhost:${backend_port}
+  reverse_proxy localhost:${backend_port} {
+    header_up X-Webauth-User {http.auth.user.tailscale_user}
+    header_up X-Webauth-Email {http.auth.user.tailscale_user}
+  }
 }
 %{ endif ~}
 
@@ -63,11 +63,11 @@
     }
   }
 
-  header_up X-Client-Cert-CN {tls_client_subject}
-  header_up X-Client-Cert-Fingerprint {tls_client_fingerprint}
-  header_up X-Webauth-User {tls_client_subject}
-  header_up X-Webauth-Email {http.auth.user.tailscale_user}
-
-  reverse_proxy localhost:${backend_port}
+  reverse_proxy localhost:${backend_port} {
+    header_up X-Client-Cert-CN {tls_client_subject}
+    header_up X-Client-Cert-Fingerprint {tls_client_fingerprint}
+    header_up X-Webauth-User {tls_client_subject}
+    header_up X-Webauth-Email {http.auth.user.tailscale_user}
+  }
 }
 %{ endif ~}
