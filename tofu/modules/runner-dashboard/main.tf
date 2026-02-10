@@ -335,7 +335,7 @@ resource "kubernetes_deployment" "dashboard" {
 
         # Caddy reverse proxy sidecar container
         dynamic "container" {
-          for_each = var.enable_caddy_proxy ? ["enabled"] : []
+          for_each = var.enable_caddy_proxy ? toset(["enabled"]) : toset([])
           content {
             name  = "caddy-proxy"
             image = var.caddy_image
@@ -353,7 +353,7 @@ resource "kubernetes_deployment" "dashboard" {
             }
 
             dynamic "volume_mount" {
-              for_each = var.caddy_mtls_ca_cert != "" ? ["enabled"] : []
+              for_each = var.caddy_mtls_ca_cert != "" ? toset(["enabled"]) : toset([])
               content {
                 name       = "caddy-mtls"
                 mount_path = "/etc/caddy/mtls"
@@ -362,7 +362,7 @@ resource "kubernetes_deployment" "dashboard" {
             }
 
             dynamic "env" {
-              for_each = var.caddy_tailscale_auth_key != "" ? ["enabled"] : []
+              for_each = var.caddy_tailscale_auth_key != "" ? toset(["enabled"]) : toset([])
               content {
                 name = "TS_AUTHKEY"
                 value_from {
@@ -463,7 +463,7 @@ resource "kubernetes_deployment" "dashboard" {
 
           # Mount environments config if provided
           dynamic "volume_mount" {
-            for_each = var.environments_config != "" ? ["enabled"] : []
+            for_each = var.environments_config != "" ? toset(["enabled"]) : toset([])
             content {
               name       = "environments-config"
               mount_path = "/etc/dashboard"
@@ -473,7 +473,7 @@ resource "kubernetes_deployment" "dashboard" {
 
           # Set config path env var when ConfigMap is mounted
           dynamic "env" {
-            for_each = var.environments_config != "" ? ["enabled"] : []
+            for_each = var.environments_config != "" ? toset(["enabled"]) : toset([])
             content {
               name  = "ENVIRONMENTS_CONFIG_PATH"
               value = "/etc/dashboard/environments.json"
@@ -488,7 +488,7 @@ resource "kubernetes_deployment" "dashboard" {
 
           # Bind SvelteKit to loopback when Caddy proxy is in front
           dynamic "env" {
-            for_each = var.enable_caddy_proxy ? ["enabled"] : []
+            for_each = var.enable_caddy_proxy ? toset(["enabled"]) : toset([])
             content {
               name  = "HOST"
               value = "127.0.0.1"
@@ -506,7 +506,7 @@ resource "kubernetes_deployment" "dashboard" {
 
         # Volume for environments ConfigMap
         dynamic "volume" {
-          for_each = var.environments_config != "" ? ["enabled"] : []
+          for_each = var.environments_config != "" ? toset(["enabled"]) : toset([])
           content {
             name = "environments-config"
             config_map {
@@ -517,7 +517,7 @@ resource "kubernetes_deployment" "dashboard" {
 
         # Volume for Caddyfile ConfigMap
         dynamic "volume" {
-          for_each = var.enable_caddy_proxy ? ["enabled"] : []
+          for_each = var.enable_caddy_proxy ? toset(["enabled"]) : toset([])
           content {
             name = "caddyfile"
             config_map {
@@ -528,7 +528,7 @@ resource "kubernetes_deployment" "dashboard" {
 
         # Volume for mTLS CA cert
         dynamic "volume" {
-          for_each = var.enable_caddy_proxy && var.caddy_mtls_ca_cert != "" ? ["enabled"] : []
+          for_each = var.enable_caddy_proxy && var.caddy_mtls_ca_cert != "" ? toset(["enabled"]) : toset([])
           content {
             name = "caddy-mtls"
             secret {
@@ -603,7 +603,7 @@ resource "kubernetes_ingress_v1" "dashboard" {
     ingress_class_name = var.ingress_class
 
     dynamic "tls" {
-      for_each = var.enable_tls ? ["enabled"] : []
+      for_each = var.enable_tls ? toset(["enabled"]) : toset([])
       content {
         hosts       = [var.ingress_host]
         secret_name = "${var.name}-tls"
