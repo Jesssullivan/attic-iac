@@ -57,7 +57,7 @@
 		</div>
 
 		<footer class="mt-16 border-t border-surface-700 py-6 text-center text-xs text-surface-500">
-			<p>GloriousFlywheel &middot; Apache 2.0</p>
+			<p>GloriousFlywheel</p>
 		</footer>
 	</main>
 </div>

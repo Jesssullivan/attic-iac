@@ -77,6 +77,6 @@
 
 	<!-- Footer -->
 	<div class="mt-16 border-t border-surface-700 pt-10 text-center">
-		<p class="text-sm text-surface-400">GloriousFlywheel &middot; Apache 2.0</p>
+		<p class="text-sm text-surface-400">GloriousFlywheel</p>
 	</div>
 </div>

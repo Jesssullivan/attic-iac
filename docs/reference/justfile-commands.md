@@ -46,15 +46,20 @@ Recipes for Nix-based builds and maintenance.
 
 ## OpenTofu
 
-Infrastructure-as-code recipes for planning and applying changes.
+Infrastructure-as-code recipes for planning and applying changes. Each recipe
+takes a stack name argument (e.g., `attic`, `gitlab-runners`, `runner-dashboard`).
 
 | Recipe | Description |
 |--------|-------------|
-| `just tofu-init` | Initialize tofu for all stacks |
-| `just tofu-plan` | Run tofu plan for all stacks |
-| `just tofu-apply` | Run tofu apply for all stacks |
-| `just tofu-deploy` | Full deploy cycle: init, plan, apply |
-| `just tofu-validate-all` | Run tofu validate against every module in `tofu/modules/` |
+| `just tofu-init <stack>` | Initialize tofu for a stack |
+| `just tofu-plan <stack>` | Run tofu plan for a stack (looks for `{ENV}.tfvars` in the stack dir) |
+| `just tofu-apply <stack>` | Apply a saved plan for a stack |
+| `just tofu-deploy <stack>` | Full deploy cycle: init, plan, apply |
+| `just tofu-validate-all` | Validate all initialized stacks and check module formatting |
+
+**Note:** `tofu-plan` expects a `{ENV}.tfvars` file (default `dev.tfvars`) in
+the stack directory. For overlay deployments, create your tfvars there or use
+the per-stack Justfiles directly. Set `ENV=prod` to target production.
 
 ## Bazel
 
@@ -93,13 +98,15 @@ Recipes for the SvelteKit runner-dashboard application.
 
 ## Runners
 
-Recipes specific to the GitLab Runner infrastructure stack.
+Shortcut recipes for the GitLab Runner infrastructure stack (`gitlab-runners`).
 
 | Recipe | Description |
 |--------|-------------|
 | `just runners-init` | Initialize tofu for the runners stack |
 | `just runners-plan` | Plan changes to the runners stack |
 | `just runners-apply` | Apply changes to the runners stack |
+| `just runners-status [namespace]` | Show pods, HPA, and Helm releases (default: `gitlab-runners`) |
+| `just runners-logs <runner> [namespace]` | Tail logs from a runner release |
 
 ## Attic
 

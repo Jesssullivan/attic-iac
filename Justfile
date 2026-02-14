@@ -468,7 +468,7 @@ k8s-operators:
     @kubectl get pods -n cnpg-system 2>/dev/null || echo "Not installed"
 
 # =============================================================================
-# GitLab Runners (Legacy - Shortcut Commands)
+# GitLab Runners (Shortcut Commands)
 # =============================================================================
 
 # Initialize GitLab runners stack
@@ -483,78 +483,22 @@ runners-apply: (tofu-apply "gitlab-runners")
 # Full deploy cycle for runners
 runners-deploy: (tofu-deploy "gitlab-runners")
 
-# Show runner status
-runners-status:
-    @echo "=== GitLab Runners Status ==="
-    @kubectl get pods -n gitlab-runners -l app=gitlab-runner 2>/dev/null || echo "No runner pods found"
-    @echo ""
-    @kubectl get deployments -n gitlab-runners 2>/dev/null || echo "No deployments"
-    @echo ""
-    @helm list -n gitlab-runners 2>/dev/null || echo "No helm releases"
-
-# Show runner logs
-runners-logs runner="nix-runner":
-    kubectl logs -n gitlab-runners -l release={{runner}} -f --tail=100
-
-# =============================================================================
-# Organization Runners
-# =============================================================================
-
-# Runner stack name (override via RUNNER_STACK env var)
-runner_stack := env_var_or_default("RUNNER_STACK", "gitlab-runners")
-
-# Initialize organization runners stack
-ils-runners-init: (tofu-init runner_stack)
-
-# Plan organization runners deployment
-ils-runners-plan: (tofu-plan runner_stack)
-
-# Apply organization runners deployment
-ils-runners-apply: (tofu-apply runner_stack)
-
-# Full deploy cycle for organization runners
-ils-runners-deploy: (tofu-deploy runner_stack)
-
-# Show organization runner status
-ils-runners-status:
-    @echo "=== Organization Runners Status ({{env}}) ==="
+# Show runner status for a namespace
+runners-status namespace="gitlab-runners":
+    @echo "=== Runner Status ({{namespace}}) ==="
     @echo ""
     @echo "=== Pods ==="
-    @kubectl get pods -n {{runner_stack}} -o wide 2>/dev/null || echo "No pods found"
+    @kubectl get pods -n {{namespace}} -o wide 2>/dev/null || echo "No pods found"
     @echo ""
     @echo "=== HPA ==="
-    @kubectl get hpa -n {{runner_stack}} 2>/dev/null || echo "No HPA found"
+    @kubectl get hpa -n {{namespace}} 2>/dev/null || echo "No HPA found"
     @echo ""
     @echo "=== Helm Releases ==="
-    @helm list -n {{runner_stack}} 2>/dev/null || echo "No helm releases"
+    @helm list -n {{namespace}} 2>/dev/null || echo "No helm releases"
 
-# Show organization runner logs
-ils-runners-logs runner="runner-docker":
-    kubectl logs -n {{runner_stack}} -l release={{runner}} -f --tail=100
-
-# Run runner pool health check
-ils-runners-health:
-    ./scripts/runner-health-check.sh
-
-# Run security isolation audit
-ils-runners-audit:
-    ./tests/security/isolation-audit.sh
-
-# Promote from dev to prod
-ils-runners-promote: (tofu-plan runner_stack)
-    @echo "Plan generated for prod. Review and run 'just ils-runners-apply' with ENV=prod to promote."
-
-# Show all organization runner types
-ils-runners-summary:
-    @echo "=== Organization Runner Types ==="
-    @echo ""
-    @echo "runner-docker : Standard builds (tags: docker, linux, amd64)"
-    @echo "runner-dind   : Container builds (tags: docker, dind, privileged)"
-    @echo "runner-rocky8 : RHEL 8 compat (tags: rocky8, rhel8, linux)"
-    @echo "runner-rocky9 : RHEL 9 compat (tags: rocky9, rhel9, linux)"
-    @echo "runner-nix    : Nix builds (tags: nix, flakes)"
-    @echo ""
-    @echo "Documentation: docs/runners/README.md"
+# Show runner logs
+runners-logs runner namespace="gitlab-runners":
+    kubectl logs -n {{namespace}} -l release={{runner}} -f --tail=100
 
 # =============================================================================
 # Attic Cache (Shortcut Commands)
