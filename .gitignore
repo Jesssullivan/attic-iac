@@ -5,6 +5,7 @@
 bazel-*
 !tofu/modules/bazel-cache/
 !docs/research/bazel-*
+!docs/build-system/bazel-*
 user.bazelrc
 
 # Nix
