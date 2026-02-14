@@ -162,7 +162,7 @@ When adding features:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the zlib license.
+By contributing, you agree that your contributions will be licensed under the Zlib license.
 
 ## Questions?
 

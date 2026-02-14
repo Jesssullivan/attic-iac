@@ -126,4 +126,4 @@ See [docs/architecture/overlay-system.md](docs/architecture/overlay-system.md) f
 
 ## License
 
-zlib
+Zlib
