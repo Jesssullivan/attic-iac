@@ -140,9 +140,13 @@ bcurl *args:
 # Development Workflows
 # =============================================================================
 
-# Quick validation cycle (format + lint + validate)
-check: fmt-check nix-check tofu-fmt-check
+# Quick validation cycle (format + lint + validate + links)
+check: fmt-check nix-check tofu-fmt-check check-links
     @echo "All checks passed!"
+
+# Validate markdown cross-references resolve to real files
+check-links:
+    @node scripts/check-links.js --mode markdown
 
 # Full validation including tofu (requires initialized stacks)
 check-full: check tofu-validate-all
