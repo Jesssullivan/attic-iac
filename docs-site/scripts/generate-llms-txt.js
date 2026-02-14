@@ -64,7 +64,7 @@ async function main() {
 	sections.push('');
 	sections.push('> Source: https://github.com/Jesssullivan/attic-iac');
 	sections.push('> Docs: https://jesssullivan.github.io/attic-iac/');
-	sections.push('> License: zlib');
+	sections.push('> License: Zlib');
 	sections.push('');
 
 	if (readme) {
