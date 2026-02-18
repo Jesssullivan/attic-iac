@@ -42,6 +42,14 @@ resource "helm_release" "gitlab_runner" {
   namespace        = var.namespace
   create_namespace = false
 
+  # Override the Helm chart's default name (release-gitlab-runner) to just
+  # the release name. This ensures the Deployment, Service, and pod labels
+  # all use var.runner_name, which HPA, PDB, and ServiceMonitor reference.
+  set {
+    name  = "fullnameOverride"
+    value = var.runner_name
+  }
+
   depends_on = [kubernetes_namespace_v1.runner]
 
   # Runner token (sensitive)

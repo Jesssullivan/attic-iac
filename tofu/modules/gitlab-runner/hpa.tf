@@ -106,7 +106,7 @@ resource "kubernetes_pod_disruption_budget_v1" "runner" {
 
     selector {
       match_labels = {
-        "app"     = "gitlab-runner"
+        "app"     = var.runner_name
         "release" = var.runner_name
       }
     }

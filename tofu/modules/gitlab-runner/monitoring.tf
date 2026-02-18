@@ -24,7 +24,7 @@ resource "kubernetes_manifest" "service_monitor" {
     spec = {
       selector = {
         matchLabels = {
-          "app"     = "gitlab-runner"
+          "app"     = var.runner_name
           "release" = var.runner_name
         }
       }
